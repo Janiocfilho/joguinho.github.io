@@ -105,9 +105,32 @@ resizeCanvas();
       "diagup-right",        
       "diagdown-left",        
       "diagdown-right",        
-    ];        
+    ];  
+  
+const tileSize = 16;
+const map = [
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
+  [1,1,0,1,1,0,1,1,1,0,1,1,1,0,1,1,0,0,1],
+  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0,1,0,1],
+  [1,0,1,2,2,2,1,0,1,1,1,0,1,0,1,0,1,0,1],
+  [1,0,0,2,2,2,0,0,0,0,1,0,0,0,0,0,0,0,1],
+  [1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
+  [1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
+  [1,0,1,0,1,1,1,0,1,1,1,1,1,1,1,0,1,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
+  [1,1,1,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1],
+  [1,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1],
+  [1,0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,0,1],
+  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+  [1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1],
+  [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
+  [1,0,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+  
     function drawTiles() {
-  const tileSize = 16;
   const startCol = Math.floor(camera.x / tileSize);
   const endCol = startCol + Math.ceil(canvas.width / tileSize);
   const startRow = Math.floor(camera.y / tileSize);
@@ -117,7 +140,13 @@ resizeCanvas();
     for (let x = startCol; x <= endCol; x++) {
       const screenX = x * tileSize - camera.x;
       const screenY = y * tileSize - camera.y;
-      ctx.fillStyle = (x + y) % 2 === 0 ? "#333" : "#444";
+
+      if (map[y] && map[y][x] === 1) {
+        ctx.fillStyle = "#111"; // parede
+      } else {
+        ctx.fillStyle = (x + y) % 2 === 0 ? "#333" : "#444"; // chão
+      }
+
       ctx.fillRect(screenX, screenY, tileSize, tileSize);
     }
   }
@@ -265,111 +294,164 @@ initNetwork();
       return player.dir; // manter a última direção        
     }        
             
-    // Atualiza posição do player        
-    function update() {                
-              
-      player.moving = false;        
-      let dx = 0,        
-        dy = 0;        
-        
-      if (keys.up) dy -= 1;        
-      if (keys.down) dy += 1;        
-      if (keys.left) dx -= 1;        
-      if (keys.right) dx += 1;        
-        
-      if (dx !== 0 || dy !== 0) {        
-        // normalizar movimento diagonal para manter velocidade constante        
-        const len = Math.sqrt(dx * dx + dy * dy);        
-        dx = (dx / len) * player.speed;        
-        dy = (dy / len) * player.speed;        
-        
-        // Atualiza posição arredondando para inteiro (grade de pixels)        
-        player.x = Math.round(player.x + dx);        
-        player.y = Math.round(player.y + dy);        
-        
-        player.moving = true;        
-        player.dir = getDirection();        
-      }        
-        
-      // Atualiza animação        
-      if (player.moving) {        
-        player.frameDelay++;        
-        if (player.frameDelay >= 10) {        
-          player.frame = (player.frame + 1) % 4;        
-          player.frameDelay = 0;        
-        }        
-      } else {        
-        player.frame = 0;        
+function update() {
+  player.moving = false;
+  let dx = 0, dy = 0;
+
+  if (keys.up) dy -= 1;
+  if (keys.down) dy += 1;
+  if (keys.left) dx -= 1;
+  if (keys.right) dx += 1;
+
+  if (dx !== 0 || dy !== 0) {
+    const len = Math.sqrt(dx * dx + dy * dy);
+    dx = (dx / len) * player.speed;
+    dy = (dy / len) * player.speed;
+
+    const padding = 4;
+    const collisionSize = spriteSize - padding * 2;
+
+    // MOVIMENTO X
+    let newX = player.x + dx;
+    let cx = newX + padding;
+    let cy = player.y + padding;
+    let collidedX = false;
+
+    for (let offsetY of [0, collisionSize - 1]) {
+      let tileX = Math.floor((dx > 0 ? cx + collisionSize - 1 : cx) / tileSize);
+      let tileY = Math.floor((cy + offsetY) / tileSize);
+      if (map[tileY]?.[tileX] === 1) {
+        collidedX = true;
+        break;
       }
-      // Centraliza a câmera no jogador
-      camera.x = player.x - camera.width / 2 + spriteSize / 2;
-      camera.y = player.y - camera.height / 2 + spriteSize / 2;
-    }        
+    }
+
+    if (!collidedX) player.x = newX;
+
+    // MOVIMENTO Y
+    let newY = player.y + dy;
+    cx = player.x + padding;
+    cy = newY + padding;
+    let collidedY = false;
+
+    for (let offsetX of [0, collisionSize - 1]) {
+      let tileX = Math.floor((cx + offsetX) / tileSize);
+      let tileY = Math.floor((dy > 0 ? cy + collisionSize : cy) / tileSize);
+      if (map[tileY]?.[tileX] === 1) {
+        collidedY = true;
+        break;
+      }
+    }
+
+    if (!collidedY) player.y = newY;
+
+    player.moving = true;
+    player.dir = getDirection();
+  }
+
+  // Animação
+  if (player.moving) {
+    player.frameDelay++;
+    if (player.frameDelay >= 10) {
+      player.frame = (player.frame + 1) % 4;
+      player.frameDelay = 0;
+    }
+  } else {
+    player.frame = 0;
+  }
+
+  // Câmera
+  camera.x = player.x - camera.width / 2 + spriteSize / 2;
+  camera.y = player.y - camera.height / 2 + spriteSize / 2;
+}
     
-    // Desenha player na tela        
-    function draw() {        
-      ctx.clearRect(0, 0, canvas.width, canvas.height);        
-      drawTiles();
-      
-      let img;        
-      let flip = false;        
-        
-      switch (player.dir) {        
-        case "up":        
-          img = sprites.up;        
-          break;        
-        case "down":        
-          img = sprites.down;        
-          break;        
-        case "left":        
-          img = sprites.side;        
-          break;        
-        case "right":        
-          img = sprites.side;        
-          flip = true;        
-          break;        
-        case "diagup-left":        
-          img = sprites.diagup;        
-          break;        
-        case "diagup-right":        
-          img = sprites.diagup;        
-          flip = true;        
-          break;        
-        case "diagdown-left":        
-          img = sprites.diagdown;        
-          flip = true;        
-          break;        
-        case "diagdown-right":        
-          img = sprites.diagdown;        
-          break;        
-      }        
-              
-      const col = player.frame % frameCols;        
-      const row = Math.floor(player.frame / frameCols);        
-        
-      const px = Math.round(player.x - camera.x);
-      const py = Math.round(player.y - camera.y);        
-        
-      ctx.save();        
-      if (flip) {        
-        ctx.translate(px + spriteSize, py);        
-        ctx.scale(-1, 1);        
-      } else {        
-        ctx.translate(px, py);        
-      }        
-      ctx.drawImage(        
-        img,        
-        col * spriteSize,        
-        row * spriteSize,        
-        spriteSize,        
-        spriteSize,        
-        0,        
-        0,        
-        spriteSize,        
-        spriteSize        
-      );        
-      ctx.restore();        
-    }        
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 1) Desenha todo o chão e paredes normalmente (inclusive as paredes acima do jogador)
+  drawTiles();
+
+  // 2) Desenha o jogador
+  let img;
+  let flip = false;
+
+  switch (player.dir) {
+    case "up":
+      img = sprites.up;
+      break;
+    case "down":
+      img = sprites.down;
+      break;
+    case "left":
+      img = sprites.side;
+      break;
+    case "right":
+      img = sprites.side;
+      flip = true;
+      break;
+    case "diagup-left":
+      img = sprites.diagup;
+      break;
+    case "diagup-right":
+      img = sprites.diagup;
+      flip = true;
+      break;
+    case "diagdown-left":
+      img = sprites.diagdown;
+      flip = true;
+      break;
+    case "diagdown-right":
+      img = sprites.diagdown;
+      break;
+  }
+
+  const col = player.frame % frameCols;
+  const row = Math.floor(player.frame / frameCols);
+
+  const px = Math.round(player.x - camera.x);
+  const py = Math.round(player.y - camera.y);
+
+  ctx.save();
+  if (flip) {
+    ctx.translate(px + spriteSize, py);
+    ctx.scale(-1, 1);
+  } else {
+    ctx.translate(px, py);
+  }
+  ctx.drawImage(
+    img,
+    col * spriteSize,
+    row * spriteSize,
+    spriteSize,
+    spriteSize,
+    0,
+    0,
+    spriteSize,
+    spriteSize
+  );
+  ctx.restore();
+
+  // 3) Agora redesenha só as paredes que estão abaixo do jogador para ficarem por cima
+  const startCol = Math.floor(camera.x / tileSize);
+  const endCol = startCol + Math.ceil(canvas.width / tileSize);
+  const startRow = Math.floor(camera.y / tileSize);
+  const endRow = startRow + Math.ceil(canvas.height / tileSize);
+
+  const playerBottom = player.y + spriteSize;
+  const playerTileRow = Math.floor(playerBottom / tileSize);
+
+  for (let y = playerTileRow; y <= endRow; y++) {
+    for (let x = startCol; x <= endCol; x++) {
+      if (map[y]?.[x] === 1) {
+        const screenX = x * tileSize - camera.x;
+        const screenY = y * tileSize - camera.y;
+
+        ctx.fillStyle = "#111"; // parede
+        ctx.fillRect(screenX, screenY, tileSize, tileSize);
+      }
+    }
+  }
+}
           
     function drawOtherPlayer() {        
   if (!sprites.down) return;        
@@ -439,9 +521,9 @@ const py = Math.round(otherPlayer.y - camera.y);
   draw();        
   sendState(); // envia estado para o outro jogador        
   drawOtherPlayer(); // desenha o outro jogador        
-e  requestAnimationFrame(gameLoop);        
+  requestAnimationFrame(gameLoop);        
 }        
- mfqea      
+        
     // Setup joystick        
     const joystick = document.getElementById("joystick");        
     const stick = document.getElementById("stick");        
