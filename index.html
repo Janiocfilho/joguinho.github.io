@@ -368,7 +368,7 @@ function update() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 1) Desenha todo o chão e paredes normalmente (inclusive as paredes acima do jogador)
+  // 1) Desenha o chão e as paredes normalmente
   drawTiles();
 
   // 2) Desenha o jogador
@@ -376,6 +376,75 @@ function draw() {
   let flip = false;
 
   switch (player.dir) {
+    case "up": img = sprites.up; break;
+    case "down": img = sprites.down; break;
+    case "left": img = sprites.side; break;
+    case "right": img = sprites.side; flip = true; break;
+    case "diagup-left": img = sprites.diagup; break;
+    case "diagup-right": img = sprites.diagup; flip = true; break;
+    case "diagdown-left": img = sprites.diagdown; flip = true; break;
+    case "diagdown-right": img = sprites.diagdown; break;
+  }
+
+  const col = player.frame % frameCols;
+  const row = Math.floor(player.frame / frameCols);
+  const px = Math.round(player.x - camera.x);
+  const py = Math.round(player.y - camera.y);
+
+  ctx.save();
+  if (flip) {
+    ctx.translate(px + spriteSize, py);
+    ctx.scale(-1, 1);
+  } else {
+    ctx.translate(px, py);
+  }
+  ctx.drawImage(
+    img,
+    col * spriteSize,
+    row * spriteSize,
+    spriteSize,
+    spriteSize,
+    0,
+    0,
+    spriteSize,
+    spriteSize
+  );
+  ctx.restore();
+
+  // 3) Desenha o outro jogador
+  drawOtherPlayer();
+
+  // 4) Redesenha as paredes que ficam abaixo de ambos os jogadores
+  const startCol = Math.floor(camera.x / tileSize);
+  const endCol = startCol + Math.ceil(canvas.width / tileSize);
+  const startRow = Math.floor(camera.y / tileSize);
+  const endRow = startRow + Math.ceil(canvas.height / tileSize);
+
+  const bottomPlayer = player.y + spriteSize;
+  const bottomOther = otherPlayer.y + spriteSize;
+  const lowestY = Math.min(bottomPlayer, bottomOther);
+  const startRedrawRow = Math.floor(lowestY / tileSize);
+
+  for (let y = startRedrawRow; y <= endRow; y++) {
+    for (let x = startCol; x <= endCol; x++) {
+      if (map[y]?.[x] === 1) {
+        const screenX = x * tileSize - camera.x;
+        const screenY = y * tileSize - camera.y;
+
+        ctx.fillStyle = "#111"; // parede
+        ctx.fillRect(screenX, screenY, tileSize, tileSize);
+      }
+    }
+  }
+}
+          
+function drawOtherPlayer() {
+  if (!sprites.down) return;
+
+  let img;
+  let flip = false;
+
+  switch (otherPlayer.dir) {
     case "up":
       img = sprites.up;
       break;
@@ -405,11 +474,11 @@ function draw() {
       break;
   }
 
-  const col = player.frame % frameCols;
-  const row = Math.floor(player.frame / frameCols);
+  const col = otherPlayer.frame % frameCols;
+  const row = Math.floor(otherPlayer.frame / frameCols);
 
-  const px = Math.round(player.x - camera.x);
-  const py = Math.round(player.y - camera.y);
+  const px = Math.round(otherPlayer.x - camera.x);
+  const py = Math.round(otherPlayer.y - camera.y);
 
   ctx.save();
   if (flip) {
@@ -418,6 +487,7 @@ function draw() {
   } else {
     ctx.translate(px, py);
   }
+
   ctx.drawImage(
     img,
     col * spriteSize,
@@ -431,13 +501,13 @@ function draw() {
   );
   ctx.restore();
 
-  // 3) Agora redesenha só as paredes que estão abaixo do jogador para ficarem por cima
+  // Redesenha paredes que estão abaixo do otherPlayer
   const startCol = Math.floor(camera.x / tileSize);
   const endCol = startCol + Math.ceil(canvas.width / tileSize);
   const startRow = Math.floor(camera.y / tileSize);
   const endRow = startRow + Math.ceil(canvas.height / tileSize);
 
-  const playerBottom = player.y + spriteSize;
+  const playerBottom = otherPlayer.y + spriteSize;
   const playerTileRow = Math.floor(playerBottom / tileSize);
 
   for (let y = playerTileRow; y <= endRow; y++) {
@@ -452,69 +522,6 @@ function draw() {
     }
   }
 }
-          
-    function drawOtherPlayer() {        
-  if (!sprites.down) return;        
-        
-  let img;        
-  let flip = false;        
-        
-  switch (otherPlayer.dir) {        
-    case "up":        
-      img = sprites.up;        
-      break;        
-    case "down":        
-      img = sprites.down;        
-      break;        
-    case "left":        
-      img = sprites.side;        
-      break;        
-    case "right":        
-      img = sprites.side;        
-      flip = true;        
-      break;        
-    case "diagup-left":        
-      img = sprites.diagup;        
-      break;        
-    case "diagup-right":        
-      img = sprites.diagup;        
-      flip = true;        
-      break;        
-    case "diagdown-left":        
-      img = sprites.diagdown;        
-      flip = true;        
-      break;        
-    case "diagdown-right":        
-      img = sprites.diagdown;        
-      break;        
-  }        
-        
-  const col = otherPlayer.frame % frameCols;        
-  const row = Math.floor(otherPlayer.frame / frameCols);        
-        
-  const px = Math.round(otherPlayer.x - camera.x);
-const py = Math.round(otherPlayer.y - camera.y);        
-        
-  ctx.save();        
-  if (flip) {        
-    ctx.translate(px + spriteSize, py);        
-    ctx.scale(-1, 1);        
-  } else {        
-    ctx.translate(px, py);        
-  }        
-  ctx.drawImage(        
-    img,        
-    col * spriteSize,        
-    row * spriteSize,        
-    spriteSize,        
-    spriteSize,        
-    0,        
-    0,        
-    spriteSize,        
-    spriteSize        
-  );        
-  ctx.restore();        
-}        
     function gameLoop() {        
               
   update();        
