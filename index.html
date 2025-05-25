@@ -164,26 +164,40 @@
       });        
     }        
         
-    function setupConnectionEvents() {        
-    conn.on("data", (data) => {
+    function setupConnectionEvents() {
+  conn.on("data", (data) => {
+    if (isHost) {
+      // Host recebeu estado do cliente
       otherPlayer = data;
-    }); // <- ESTE parêntese e chave estavam faltando
+    } else {
+      // Cliente recebeu estado do host
+      otherPlayer = data;
+    }
+  });
 }        
         
-// Envia estado atual ao outro jogador        
-function sendState() {        
-  if (conn && conn.open) {        
-    const data = {        
-      x: player.x,        
-      y: player.y,        
-      dir: player.dir,        
-      frame: player.frame,        
-      moving: player.moving,        
-    };        
-    if (conn && conn.open) {
-      conn.send(data);
+function sendState() {
+  if (conn && conn.open) {
+    if (isHost) {
+      // Host envia apenas seu próprio estado
+      conn.send({
+        x: player.x,
+        y: player.y,
+        dir: player.dir,
+        frame: player.frame,
+        moving: player.moving,
+      });
+    } else {
+      // Cliente envia seu próprio estado
+      conn.send({
+        x: player.x,
+        y: player.y,
+        dir: player.dir,
+        frame: player.frame,
+        moving: player.moving,
+      });
     }
-  }        
+  }
 }        
         
 initNetwork(); // Inicia a rede assim que o script carrega        
