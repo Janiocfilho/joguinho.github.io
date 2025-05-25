@@ -166,11 +166,23 @@
         
     function setupConnectionEvents() {
   conn.on("data", (data) => {
-    if (isHost) {
-      // Host recebeu estado do cliente
+    if (data.type === "client" && isHost) {
+      // Host recebe estado do cliente
       otherPlayer = data;
-    } else {
-      // Cliente recebeu estado do host
+
+      // Host envia sua própria posição de volta ao cliente
+      if (conn && conn.open) {
+        conn.send({
+          type: "host",
+          x: player.x,
+          y: player.y,
+          dir: player.dir,
+          frame: player.frame,
+          moving: player.moving,
+        });
+      }
+    } else if (data.type === "host" && !isHost) {
+      // Cliente recebe estado do host
       otherPlayer = data;
     }
   });
@@ -178,25 +190,15 @@
         
 function sendState() {
   if (conn && conn.open) {
-    if (isHost) {
-      // Host envia apenas seu próprio estado
-      conn.send({
-        x: player.x,
-        y: player.y,
-        dir: player.dir,
-        frame: player.frame,
-        moving: player.moving,
-      });
-    } else {
-      // Cliente envia seu próprio estado
-      conn.send({
-        x: player.x,
-        y: player.y,
-        dir: player.dir,
-        frame: player.frame,
-        moving: player.moving,
-      });
-    }
+    const data = {
+      type: isHost ? "host" : "client",
+      x: player.x,
+      y: player.y,
+      dir: player.dir,
+      frame: player.frame,
+      moving: player.moving,
+    };
+    conn.send(data);
   }
 }        
         
