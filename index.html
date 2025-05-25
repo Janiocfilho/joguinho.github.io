@@ -149,39 +149,24 @@
   });
 }        
         
-    function startAsHost() {
-  isHost = true;
-  peer = new Peer(basePeerID); // <- importante que o host use o ID fixo
-
-  peer.on("open", () => {
-    console.log("Host iniciado com ID:", basePeerID);
-  });
-
-  peer.on("connection", (connection) => {
-    conn = connection;
-    console.log("Cliente conectado.");
-    setupConnectionEvents();
-  });
-}        
+    function startAsHost() {        
+      isHost = true;        
+      peer = new Peer(basePeerID);        
+        
+      peer.on("open", () => {        
+        console.log("Host iniciado.");        
+      });        
+        
+      peer.on("connection", (connection) => {        
+        conn = connection;        
+        setupConnectionEvents();        
+        console.log("Cliente conectado.");        
+      });        
+    }        
         
     function setupConnectionEvents() {        
-    conn.on("data", (data) => {        
-        if (!isHost) {        
-            // Cliente recebe posição do host        
-            otherPlayer = data;        
-        } else {        
-            // Host recebe do cliente e responde com seu estado        
-            otherPlayer = data;        
-            if (conn && conn.open) {
-                conn.send({
-                    x: player.x,        
-                    y: player.y,        
-                    dir: player.dir,        
-                    frame: player.frame,        
-                    moving: player.moving,        
-                });
-            }
-        }
+    conn.on("data", (data) => {
+      otherPlayer = data;
     }); // <- ESTE parêntese e chave estavam faltando
 }        
         
