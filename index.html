@@ -1,7 +1,4 @@
-<!DOCTYPE html>        
-<html lang="pt-BR">        
-        
-<head>        
+<!DOCTYPE html>        <html lang="pt-BR">        <head>        
   <meta charset="UTF-8" />        
   <meta name="viewport" content="width=device-width, initial-scale=1" />        
   <title>Jogo Sprite Pixelado com Joystick 8 direções</title>        
@@ -55,14 +52,7 @@
   <canvas id="game" width="160" height="144"></canvas>        
   <div id="joystick">        
     <div id="stick"></div>        
-  </div>        
-        
-  <!-- PreloadJS -->        
-  <script src="https://code.createjs.com/1.0.0/preloadjs.min.js"></script>        
-  <!-- GSAP -->        
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>        
-        
-  <script>        
+  </div>          <!-- PreloadJS -->          <script src="https://code.createjs.com/1.0.0/preloadjs.min.js"></script>          <!-- GSAP -->          <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>          <script>        
           
     const canvas = document.getElementById("game");        
     const ctx = canvas.getContext("2d");        
@@ -77,7 +67,7 @@
         
     const spriteSize = 16;        
     const frameCols = 2;            
-          
+    
     // Player objeto        
     const player = {        
       x: canvas.width / 2 - spriteSize / 2,        
@@ -103,17 +93,7 @@
       "diagdown-left",        
       "diagdown-right",        
     ];        
-        
-    // Controle das teclas        
-    let keys = { up: false, down: false, left: false, right: false };        
-    let peer, conn;        
-    let isHost = false;        
-    let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false };
-  
-        
-    // ID baseado no IP local genérico        
-    const basePeerID = "game-peer";   
-  
+              
       const camera = {
   x: 0,
   y: 0,
@@ -121,9 +101,18 @@
   height: canvas.height,
 };
         
-    function initNetwork() {
-  // Cliente tenta conexão com ID aleatório
-  const tempPeer = new Peer(undefined); // ID aleatório
+// Controle das teclas        
+let keys = { up: false, down: false, left: false, right: false };        
+let peer, conn;        
+let isHost = false;        
+let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false };
+
+// ID baseado no IP local genérico        
+const basePeerID = "game-peer";
+let hostSendInterval;
+
+function initNetwork() {
+  const tempPeer = new Peer(undefined); // Cliente com ID aleatório
 
   tempPeer.on("open", (id) => {
     console.log("Tentando conectar como cliente, ID:", id);
@@ -137,7 +126,7 @@
 
     tempConn.on("error", (err) => {
       console.log("Falha ao conectar, tornando-se host.");
-      startAsHost(); // Se falhar, se torna host
+      startAsHost();
     });
 
     setTimeout(() => {
@@ -147,24 +136,25 @@
       }
     }, 3000);
   });
-}        
-        
-    function startAsHost() {        
-      isHost = true;        
-      peer = new Peer(basePeerID);        
-        
-      peer.on("open", () => {        
-        console.log("Host iniciado.");        
-      });        
-        
-      peer.on("connection", (connection) => {        
-        conn = connection;        
-        setupConnectionEvents();        
-        console.log("Cliente conectado.");        
-      });        
-    }        
-        
-    function setupConnectionEvents() {
+}
+
+function startAsHost() {
+  isHost = true;
+  peer = new Peer(basePeerID);
+
+  peer.on("open", () => {
+    console.log("Host iniciado.");
+    startHostBroadcast();
+  });
+
+  peer.on("connection", (connection) => {
+    conn = connection;
+    setupConnectionEvents();
+    console.log("Cliente conectado.");
+  });
+}
+
+function setupConnectionEvents() {
   conn.on("data", (data) => {
     if (data.type === "client" && isHost) {
       // Host recebe estado do cliente
@@ -186,8 +176,20 @@
       otherPlayer = data;
     }
   });
-}        
-        
+
+  conn.on("close", () => {
+    console.warn("Conexão encerrada.");
+    clearInterval(hostSendInterval);
+    hostSendInterval = null;
+  });
+
+  conn.on("error", (err) => {
+    console.error("Erro na conexão:", err);
+    clearInterval(hostSendInterval);
+    hostSendInterval = null;
+  });
+}
+
 function sendState() {
   if (conn && conn.open) {
     const data = {
@@ -200,9 +202,28 @@ function sendState() {
     };
     conn.send(data);
   }
-}        
+}
+
+// Host envia sua posição continuamente mesmo sem input do cliente
+function startHostBroadcast() {
+  if (!hostSendInterval) {
+    hostSendInterval = setInterval(() => {
+      if (isHost && conn && conn.open) {
+        conn.send({
+          type: "host",
+          x: player.x,
+          y: player.y,
+          dir: player.dir,
+          frame: player.frame,
+          moving: player.moving,
+        });
+      }
+    }, 50); // a cada 50ms
+  }
+}
+
+initNetwork();
         
-initNetwork(); // Inicia a rede assim que o script carrega        
     // Função para decidir a direção do player com base nas teclas pressionadas        
     function getDirection() {        
       if (keys.up && keys.left) return "diagup-left";        
@@ -217,11 +238,7 @@ initNetwork(); // Inicia a rede assim que o script carrega
     }        
             
     // Atualiza posição do player        
-    function update() {        
-      // Verifica se a conexão P2P foi perdida        
-      if (conn && conn.open === false) {        
-        conn = null;        
-      }        
+    function update() {                
               
       player.moving = false;        
       let dx = 0,        
@@ -260,7 +277,7 @@ initNetwork(); // Inicia a rede assim que o script carrega
       camera.x = player.x - camera.width / 2 + spriteSize / 2;
       camera.y = player.y - camera.height / 2 + spriteSize / 2;
     }        
-        
+    
     // Desenha player na tela        
     function draw() {        
       ctx.clearRect(0, 0, canvas.width, canvas.height);        
@@ -506,6 +523,5 @@ const py = Math.round(otherPlayer.y - camera.y);
         
       gameLoop();        
     });        
-  </script>        
-</body>        
+  </script>        </body>        
 </html>
