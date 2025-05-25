@@ -59,9 +59,22 @@
         
     // Escala para deixar pixel perfeito ao redimensionar        
     const scale = 4;        
-    canvas.style.width = canvas.width * scale + "px";        
-    canvas.style.height = canvas.height * scale + "px";        
-        
+    function resizeCanvas() {
+  const ratio = canvas.width / canvas.height;
+  let w = window.innerWidth;
+  let h = window.innerHeight;
+
+  if (w / h > ratio) {
+    w = h * ratio;
+  } else {
+    h = w / ratio;
+  }
+
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
     // Desliga suavização para pixel art nítido        
     ctx.imageSmoothingEnabled = false;        
         
@@ -93,7 +106,22 @@
       "diagdown-left",        
       "diagdown-right",        
     ];        
-              
+    function drawTiles() {
+  const tileSize = 16;
+  const startCol = Math.floor(camera.x / tileSize);
+  const endCol = startCol + Math.ceil(canvas.width / tileSize);
+  const startRow = Math.floor(camera.y / tileSize);
+  const endRow = startRow + Math.ceil(canvas.height / tileSize);
+
+  for (let y = startRow; y <= endRow; y++) {
+    for (let x = startCol; x <= endCol; x++) {
+      const screenX = x * tileSize - camera.x;
+      const screenY = y * tileSize - camera.y;
+      ctx.fillStyle = (x + y) % 2 === 0 ? "#333" : "#444";
+      ctx.fillRect(screenX, screenY, tileSize, tileSize);
+    }
+  }
+}
       const camera = {
   x: 0,
   y: 0,
@@ -281,7 +309,8 @@ initNetwork();
     // Desenha player na tela        
     function draw() {        
       ctx.clearRect(0, 0, canvas.width, canvas.height);        
-        
+      drawTiles();
+      
       let img;        
       let flip = false;        
         
