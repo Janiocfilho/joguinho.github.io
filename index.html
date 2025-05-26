@@ -130,12 +130,6 @@ const map = [
   [1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1],
 ];
   
-  let monster = {
-  x: 4 * tileSize,
-  y: 4 * tileSize,
-  speed: 0.5,
-  vision: 8, // número de tiles de visão
-};
   
     function drawTiles() {
   const startCol = Math.floor(camera.x / tileSize);
@@ -169,42 +163,111 @@ const map = [
 let keys = { up: false, down: false, left: false, right: false };        
 let peer, conn;        
 let isHost = false;        
-let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false };
+let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
 
-// ID baseado no IP local genérico        
+// ID fixo para o host        
 const basePeerID = "game-peer";
 let hostSendInterval;
+let lastPing = Date.now();
+let lastPong = Date.now(); // novo: cliente espera pong do host
+let pingCheckInterval;
+let triedBecomeHostAfterDisconnect = false;
 
 function initNetwork() {
-  const tempPeer = new Peer(undefined); // Cliente com ID aleatório
+  if (isHost) {
+    startAsHost();
+    return;
+  }
 
-  tempPeer.on("open", (id) => {
+  peer = new Peer(undefined); // Cliente com ID aleatório
+
+  peer.on("open", (id) => {
     console.log("Tentando conectar como cliente, ID:", id);
-    const tempConn = tempPeer.connect(basePeerID);
-
-    tempConn.on("open", () => {
-      console.log("Conectado ao host com sucesso.");
-      conn = tempConn;
-      setupConnectionEvents();
-    });
-
-    tempConn.on("error", (err) => {
-      console.log("Falha ao conectar, tornando-se host.");
-      startAsHost();
-    });
-
-    setTimeout(() => {
-      if (!conn || !conn.open) {
-        console.log("Timeout na tentativa de conexão. Tornando-se host.");
-        startAsHost();
-      }
-    }, 3000);
+    connectToHost();
   });
+
+  peer.on("error", (err) => {
+    console.error("Erro no peer:", err);
+  });
+}
+
+function connectToHost() {
+  if (!peer) return;
+
+  const tempConn = peer.connect(basePeerID);
+  let connected = false;
+
+  tempConn.on("open", () => {
+    console.log("Conectado ao host com sucesso.");
+    conn = tempConn;
+    setupConnectionEvents();
+    connected = true;
+
+    // Cliente envia ping e monitora pong
+    pingCheckInterval = setInterval(() => {
+      if (conn && conn.open) {
+        conn.send({ type: "ping" });
+
+        if (Date.now() - lastPong > 5000 && !triedBecomeHostAfterDisconnect) {
+          console.warn("Host inativo. Virando host...");
+          triedBecomeHostAfterDisconnect = true;
+          clearInterval(pingCheckInterval);
+          otherPlayer.connected = false;
+          startAsHost();
+        }
+      }
+    }, 2000);
+  });
+
+  tempConn.on("error", (err) => {
+    console.log("Erro na conexão com host:", err);
+  });
+
+  tempConn.on("close", () => {
+    console.warn("Conexão com host fechada.");
+    clearInterval(pingCheckInterval);
+
+    if (!isHost && !triedBecomeHostAfterDisconnect) {
+      triedBecomeHostAfterDisconnect = true;
+      console.log("Tentando virar host após desconexão do host...");
+      otherPlayer.connected = false;
+      startAsHost();
+    }
+  });
+
+  setTimeout(() => {
+    if (!connected) {
+      console.log("Timeout na tentativa de conexão ao host. Virando host...");
+      otherPlayer.connected = false;
+      startAsHost();
+    }
+  }, 3000);
 }
 
 function startAsHost() {
   isHost = true;
-  peer = new Peer(basePeerID);
+  triedBecomeHostAfterDisconnect = false;
+  otherPlayer.connected = false;
+  peer?.destroy();
+peer = new Peer(basePeerID);
+
+peer.on("error", (err) => {
+  if (err.type === "unavailable-id") {
+    console.warn("ID 'game-peer' já está em uso. Criando host com ID aleatório.");
+    peer = new Peer(); // ID aleatório
+    peer.on("open", () => {
+      console.log("Host iniciado com ID aleatório.");
+      startHostBroadcast();
+    });
+    peer.on("connection", (connection) => {
+      conn = connection;
+      setupConnectionEvents();
+      console.log("Cliente conectado.");
+    });
+  } else {
+    console.error("Erro no host peer:", err);
+  }
+});
 
   peer.on("open", () => {
     console.log("Host iniciado.");
@@ -216,16 +279,33 @@ function startAsHost() {
     setupConnectionEvents();
     console.log("Cliente conectado.");
   });
+
+  peer.on("error", (err) => {
+    console.error("Erro no host peer:", err);
+  });
 }
 
 function setupConnectionEvents() {
-  conn.on("data", (data) => {
-    if (data.type === "client" && isHost) {
-      // Host recebe estado do cliente
-      otherPlayer = data;
-      otherPlayer.connected = true; // <- Adiciona aqui
+  if (!conn) return;
 
-      // Host envia sua própria posição de volta ao cliente
+  conn.on("data", (data) => {
+    if (data.type === "ping") {
+      lastPing = Date.now();
+      if (isHost && conn && conn.open) {
+        conn.send({ type: "pong" });
+      }
+      return;
+    }
+
+    if (data.type === "pong") {
+      lastPong = Date.now();
+      return;
+    }
+
+    if (data.type === "client" && isHost) {
+      otherPlayer = data;
+      otherPlayer.connected = true;
+
       if (conn && conn.open) {
         conn.send({
           type: "host",
@@ -237,9 +317,8 @@ function setupConnectionEvents() {
         });
       }
     } else if (data.type === "host" && !isHost) {
-      // Cliente recebe estado do host
       otherPlayer = data;
-      otherPlayer.connected = true; // <- E aqui também
+      otherPlayer.connected = true;
     }
   });
 
@@ -247,14 +326,44 @@ function setupConnectionEvents() {
     console.warn("Conexão encerrada.");
     clearInterval(hostSendInterval);
     hostSendInterval = null;
+    clearInterval(pingCheckInterval);
+
+    if (isHost) {
+      otherPlayer.connected = false;
+      peer.on("connection", (newConn) => {
+        conn = newConn;
+        setupConnectionEvents();
+        console.log("Novo cliente conectado.");
+      });
+    } else {
+      if (!triedBecomeHostAfterDisconnect) {
+        triedBecomeHostAfterDisconnect = true;
+        console.log("Cliente desconectado do host, tentando virar host...");
+        otherPlayer.connected = false;
+        startAsHost();
+      }
+    }
   });
 
   conn.on("error", (err) => {
     console.error("Erro na conexão:", err);
     clearInterval(hostSendInterval);
     hostSendInterval = null;
+    clearInterval(pingCheckInterval);
   });
+
+  // Cliente já está pingando no connectToHost()
 }
+
+// Verifica se o cliente está inativo (ping ausente)
+setInterval(() => {
+  if (isHost && Date.now() - lastPing > 5000) {
+    if (otherPlayer.connected) {
+      console.warn("Cliente inativo. Considerando desconectado.");
+      otherPlayer.connected = false;
+    }
+  }
+}, 3000);
 
 function sendState() {
   if (conn && conn.open) {
@@ -270,7 +379,6 @@ function sendState() {
   }
 }
 
-// Host envia sua posição continuamente mesmo sem input do cliente
 function startHostBroadcast() {
   if (!hostSendInterval) {
     hostSendInterval = setInterval(() => {
@@ -284,7 +392,7 @@ function startHostBroadcast() {
           moving: player.moving,
         });
       }
-    }, 50); // a cada 50ms
+    }, 50);
   }
 }
 
@@ -374,13 +482,13 @@ function update() {
   camera.y = player.y - camera.height / 2 + spriteSize / 2;
 }
 
-    
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   // 1) Desenha o chão e as paredes normalmente
   drawTiles();
 
-  // 2) Desenha o jogador
+  // 2) Desenha o jogador principal
   let img;
   let flip = false;
 
@@ -419,22 +527,96 @@ function draw() {
     spriteSize
   );
   ctx.restore();
-  
-  // 3) Desenha o outro jogador
-  drawOtherPlayer();
 
-  // 4) Redesenha as paredes que ficam abaixo de ambos os jogadores
+  // 3) Só desenha o outro jogador se ele estiver conectado
+  if (otherPlayer.connected) {
+    drawOtherPlayer();
+  }
+
+  // 4) Redesenha as paredes que ficam abaixo de ambos os jogadores (ou só do principal se o outro não estiver conectado)
   const startCol = Math.floor(camera.x / tileSize);
   const endCol = startCol + Math.ceil(canvas.width / tileSize);
   const startRow = Math.floor(camera.y / tileSize);
   const endRow = startRow + Math.ceil(canvas.height / tileSize);
 
   const bottomPlayer = player.y + spriteSize;
-  const bottomOther = otherPlayer.y + spriteSize;
+  const bottomOther = otherPlayer.connected ? otherPlayer.y + spriteSize : bottomPlayer;
   const lowestY = Math.min(bottomPlayer, bottomOther);
   const startRedrawRow = Math.floor(lowestY / tileSize);
 
   for (let y = startRedrawRow; y <= endRow; y++) {
+    for (let x = startCol; x <= endCol; x++) {
+      if (map[y]?.[x] === 1) {
+        const screenX = x * tileSize - camera.x;
+        const screenY = y * tileSize - camera.y;
+
+        ctx.fillStyle = "#111"; // parede
+        ctx.fillRect(screenX, screenY, tileSize, tileSize);
+      }
+    }
+  }
+}
+
+function drawOtherPlayer() {
+  // Se não estiver conectado, não desenha e limpa o objeto para evitar restos
+  if (!otherPlayer.connected) {
+    otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
+    return;
+  }
+
+  if (!sprites.down) return;
+
+  let img;
+  let flip = false;
+
+  switch (otherPlayer.dir) {
+    case "up": img = sprites.up; break;
+    case "down": img = sprites.down; break;
+    case "left": img = sprites.side; break;
+    case "right": img = sprites.side; flip = true; break;
+    case "diagup-left": img = sprites.diagup; break;
+    case "diagup-right": img = sprites.diagup; flip = true; break;
+    case "diagdown-left": img = sprites.diagdown; flip = true; break;
+    case "diagdown-right": img = sprites.diagdown; break;
+  }
+
+  const col = otherPlayer.frame % frameCols;
+  const row = Math.floor(otherPlayer.frame / frameCols);
+
+  const px = Math.round(otherPlayer.x - camera.x);
+  const py = Math.round(otherPlayer.y - camera.y);
+
+  ctx.save();
+  if (flip) {
+    ctx.translate(px + spriteSize, py);
+    ctx.scale(-1, 1);
+  } else {
+    ctx.translate(px, py);
+  }
+
+  ctx.drawImage(
+    img,
+    col * spriteSize,
+    row * spriteSize,
+    spriteSize,
+    spriteSize,
+    0,
+    0,
+    spriteSize,
+    spriteSize
+  );
+  ctx.restore();
+
+  // Redesenha paredes que estão abaixo do otherPlayer
+  const startCol = Math.floor(camera.x / tileSize);
+  const endCol = startCol + Math.ceil(canvas.width / tileSize);
+  const startRow = Math.floor(camera.y / tileSize);
+  const endRow = startRow + Math.ceil(canvas.height / tileSize);
+
+  const playerBottom = otherPlayer.y + spriteSize;
+  const playerTileRow = Math.floor(playerBottom / tileSize);
+
+  for (let y = playerTileRow; y <= endRow; y++) {
     for (let x = startCol; x <= endCol; x++) {
       if (map[y]?.[x] === 1) {
         const screenX = x * tileSize - camera.x;
