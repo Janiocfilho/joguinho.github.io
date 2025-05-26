@@ -223,6 +223,7 @@ function setupConnectionEvents() {
     if (data.type === "client" && isHost) {
       // Host recebe estado do cliente
       otherPlayer = data;
+      otherPlayer.connected = true; // <- Adiciona aqui
 
       // Host envia sua própria posição de volta ao cliente
       if (conn && conn.open) {
@@ -238,6 +239,7 @@ function setupConnectionEvents() {
     } else if (data.type === "host" && !isHost) {
       // Cliente recebe estado do host
       otherPlayer = data;
+      otherPlayer.connected = true; // <- E aqui também
     }
   });
 
