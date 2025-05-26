@@ -93,7 +93,7 @@ resizeCanvas();
     };        
         
     // Armazena sprites carregadas        
-    const sprites = {};        
+    const sprites = {};  
         
     // Direções possíveis para 8 direções        
     const directions = [        
@@ -125,10 +125,17 @@ const map = [
   [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
   [1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1],
   [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
-  [1,0,1,1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1],
+  [1,0,1,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1],
 ];
+  
+  let monster = {
+  x: 4 * tileSize,
+  y: 4 * tileSize,
+  speed: 0.5,
+  vision: 8, // número de tiles de visão
+};
   
     function drawTiles() {
   const startCol = Math.floor(camera.x / tileSize);
@@ -293,7 +300,7 @@ initNetwork();
       if (keys.right) return "right";        
       return player.dir; // manter a última direção        
     }        
-            
+  
 function update() {
   player.moving = false;
   let dx = 0, dy = 0;
@@ -364,10 +371,10 @@ function update() {
   camera.x = player.x - camera.width / 2 + spriteSize / 2;
   camera.y = player.y - camera.height / 2 + spriteSize / 2;
 }
+
     
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   // 1) Desenha o chão e as paredes normalmente
   drawTiles();
 
@@ -410,7 +417,7 @@ function draw() {
     spriteSize
   );
   ctx.restore();
-
+  
   // 3) Desenha o outro jogador
   drawOtherPlayer();
 
@@ -439,7 +446,7 @@ function draw() {
 }
           
 function drawOtherPlayer() {
-  if (!sprites.down) return;
+  if (!sprites.down || !otherPlayer.connected) return;
 
   let img;
   let flip = false;
@@ -522,9 +529,9 @@ function drawOtherPlayer() {
     }
   }
 }
-    function gameLoop() {        
-              
-  update();        
+
+function gameLoop() {                   
+  update();     
   draw();        
   sendState(); // envia estado para o outro jogador        
   drawOtherPlayer(); // desenha o outro jogador        
