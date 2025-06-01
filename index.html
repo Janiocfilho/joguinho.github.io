@@ -1,836 +1,850 @@
-<!DOCTYPE html>        <html lang="pt-BR">        <head>        
-  <meta charset="UTF-8" />        
-  <meta name="viewport" content="width=device-width, initial-scale=1" />        
-  <title>Jogo Sprite Pixelado com Joystick 8 direções</title>        
-  <style>        
-    * {        
-      margin: 0;        
-      padding: 0;        
-      box-sizing: border-box;        
-    }        
-    body {        
-      background: #000;        
-      overflow: hidden;        
-    }        
-    canvas {        
-      display: block;        
-      margin: auto;        
-      image-rendering: pixelated;        
-      image-rendering: crisp-edges;        
-      background: #222;        
-      image-rendering: pixelated;        
-    }        
-    #joystick {        
-      position: fixed;        
-      bottom: 20px;        
-      left: 20px;        
-      width: 140px;        
-      height: 140px;        
-      background: rgba(255, 255, 255, 0.05);        
-      border-radius: 50%;        
-      touch-action: none;        
-      user-select: none;        
-      -webkit-user-select: none;        
-    }        
-    #stick {        
-      width: 70px;        
-      height: 70px;        
-      background: rgba(255, 255, 255, 0.2);        
-      border-radius: 50%;        
-      position: absolute;        
-      left: 35px;        
-      top: 35px;        
-      touch-action: none;        
-      user-select: none;        
-      -webkit-user-select: none;        
-    }        
-  </style>        
-  <!-- PeerJS -->        
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>        
-</head>        
-<body>        
-  <canvas id="game" width="160" height="144"></canvas>        
-  <div id="joystick">        
-    <div id="stick"></div>        
-  </div>          <!-- PreloadJS -->          <script src="https://code.createjs.com/1.0.0/preloadjs.min.js"></script>          <!-- GSAP -->          <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>          <script>        
-          
-    const canvas = document.getElementById("game");        
-    const ctx = canvas.getContext("2d");        
-        
-    // Escala para deixar pixel perfeito ao redimensionar        
-    const scale = 4;        
-    function resizeCanvas() {
-  const ratio = canvas.width / canvas.height;
-  let w = window.innerWidth;
-  let h = window.innerHeight;
-
-  if (w / h > ratio) {
-    w = h * ratio;
-  } else {
-    h = w / ratio;
-  }
-
-  canvas.style.width = w + "px";
-  canvas.style.height = h + "px";
-}
-window.addEventListener("resize", resizeCanvas);
-resizeCanvas();
-    // Desliga suavização para pixel art nítido        
-    ctx.imageSmoothingEnabled = false;        
-        
-    const spriteSize = 16;        
-    const frameCols = 2;            
-    
-    // Player objeto        
-    const player = {        
-      x: canvas.width / 2 - spriteSize / 2,        
-      y: canvas.height / 2 - spriteSize / 2,        
-      dir: "down",        
-      frame: 0,        
-      frameDelay: 0,        
-      moving: false,        
-      speed: 1,        
-    };        
-        
-    // Armazena sprites carregadas        
-    const sprites = {};  
-        
-    // Direções possíveis para 8 direções        
-    const directions = [        
-      "up",        
-      "down",        
-      "left",        
-      "right",        
-      "diagup-left",        
-      "diagup-right",        
-      "diagdown-left",        
-      "diagdown-right",        
-    ];  
-  
-const tileSize = 16;
-const map = [
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
-  [1,1,0,1,1,0,1,1,1,0,1,1,1,0,1,1,0,0,1],
-  [1,0,0,0,1,0,0,0,1,0,0,0,1,0,1,0,1,0,1],
-  [1,0,1,2,2,2,1,0,1,1,1,0,1,0,1,0,1,0,1],
-  [1,0,0,2,2,2,0,0,0,0,1,0,0,0,0,0,0,0,1],
-  [1,0,1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1],
-  [1,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,1],
-  [1,0,1,0,1,1,1,0,1,1,1,1,1,1,1,0,1,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1],
-  [1,1,1,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1],
-  [1,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1],
-  [1,0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,0,1],
-  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
-  [1,1,1,1,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1],
-  [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1],
-  [1,0,1,1,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
-  [1,1,1,1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1],
-];
-  
-  
-    function drawTiles() {
-  const startCol = Math.floor(camera.x / tileSize);
-  const endCol = startCol + Math.ceil(canvas.width / tileSize);
-  const startRow = Math.floor(camera.y / tileSize);
-  const endRow = startRow + Math.ceil(canvas.height / tileSize);
-
-  for (let y = startRow; y <= endRow; y++) {
-    for (let x = startCol; x <= endCol; x++) {
-      const screenX = x * tileSize - camera.x;
-      const screenY = y * tileSize - camera.y;
-
-      if (map[y] && map[y][x] === 1) {
-        ctx.fillStyle = "#111"; // parede
-      } else {
-        ctx.fillStyle = (x + y) % 2 === 0 ? "#333" : "#444"; // chão
-      }
-
-      ctx.fillRect(screenX, screenY, tileSize, tileSize);
-    }
-  }
-}
-      const camera = {
-  x: 0,
-  y: 0,
-  width: canvas.width,
-  height: canvas.height,
-};
-        
-// Controle das teclas        
-let keys = { up: false, down: false, left: false, right: false };        
-let peer, conn;        
-let isHost = false;        
-let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
-
-// ID fixo para o host        
-const basePeerID = "game-peer";
-let hostSendInterval;
-let lastPing = Date.now();
-let lastPong = Date.now(); // novo: cliente espera pong do host
-let pingCheckInterval;
-let triedBecomeHostAfterDisconnect = false;
-
-function initNetwork() {
-  if (isHost) {
-    startAsHost();
-    return;
-  }
-
-  peer = new Peer(undefined); // Cliente com ID aleatório
-
-  peer.on("open", (id) => {
-    console.log("Tentando conectar como cliente, ID:", id);
-    connectToHost();
-  });
-
-  peer.on("error", (err) => {
-    console.error("Erro no peer:", err);
-  });
-}
-
-function connectToHost() {
-  if (!peer) return;
-
-  const tempConn = peer.connect(basePeerID);
-  let connected = false;
-
-  tempConn.on("open", () => {
-    console.log("Conectado ao host com sucesso.");
-    conn = tempConn;
-    setupConnectionEvents();
-    connected = true;
-
-    // Cliente envia ping e monitora pong
-    pingCheckInterval = setInterval(() => {
-      if (conn && conn.open) {
-        conn.send({ type: "ping" });
-
-        if (Date.now() - lastPong > 5000 && !triedBecomeHostAfterDisconnect) {
-          console.warn("Host inativo. Virando host...");
-          triedBecomeHostAfterDisconnect = true;
-          clearInterval(pingCheckInterval);
-          otherPlayer.connected = false;
-          startAsHost();
-        }
-      }
-    }, 2000);
-  });
-
-  tempConn.on("error", (err) => {
-    console.log("Erro na conexão com host:", err);
-  });
-
-  tempConn.on("close", () => {
-    console.warn("Conexão com host fechada.");
-    clearInterval(pingCheckInterval);
-
-    if (!isHost && !triedBecomeHostAfterDisconnect) {
-      triedBecomeHostAfterDisconnect = true;
-      console.log("Tentando virar host após desconexão do host...");
-      otherPlayer.connected = false;
-      startAsHost();
-    }
-  });
-
-  setTimeout(() => {
-    if (!connected) {
-      console.log("Timeout na tentativa de conexão ao host. Virando host...");
-      otherPlayer.connected = false;
-      startAsHost();
-    }
-  }, 3000);
-}
-
-function startAsHost() {
-  isHost = true;
-  triedBecomeHostAfterDisconnect = false;
-  otherPlayer.connected = false;
-  peer?.destroy();
-peer = new Peer(basePeerID);
-
-peer.on("error", (err) => {
-  if (err.type === "unavailable-id") {
-    console.warn("ID 'game-peer' já está em uso. Criando host com ID aleatório.");
-    peer = new Peer(); // ID aleatório
-    peer.on("open", () => {
-      console.log("Host iniciado com ID aleatório.");
-      startHostBroadcast();
-    });
-    peer.on("connection", (connection) => {
-      conn = connection;
-      setupConnectionEvents();
-      console.log("Cliente conectado.");
-    });
-  } else {
-    console.error("Erro no host peer:", err);
-  }
-});
-
-  peer.on("open", () => {
-    console.log("Host iniciado.");
-    startHostBroadcast();
-  });
-
-  peer.on("connection", (connection) => {
-    conn = connection;
-    setupConnectionEvents();
-    console.log("Cliente conectado.");
-  });
-
-  peer.on("error", (err) => {
-    console.error("Erro no host peer:", err);
-  });
-}
-
-function setupConnectionEvents() {
-  if (!conn) return;
-
-  conn.on("data", (data) => {
-    if (data.type === "ping") {
-      lastPing = Date.now();
-      if (isHost && conn && conn.open) {
-        conn.send({ type: "pong" });
-      }
-      return;
-    }
-
-    if (data.type === "pong") {
-      lastPong = Date.now();
-      return;
-    }
-
-    if (data.type === "client" && isHost) {
-      otherPlayer = data;
-      otherPlayer.connected = true;
-
-      if (conn && conn.open) {
-        conn.send({
-          type: "host",
-          x: player.x,
-          y: player.y,
-          dir: player.dir,
-          frame: player.frame,
-          moving: player.moving,
-        });
-      }
-    } else if (data.type === "host" && !isHost) {
-      otherPlayer = data;
-      otherPlayer.connected = true;
-    }
-  });
-
-  conn.on("close", () => {
-    console.warn("Conexão encerrada.");
-    clearInterval(hostSendInterval);
-    hostSendInterval = null;
-    clearInterval(pingCheckInterval);
-
-    if (isHost) {
-      otherPlayer.connected = false;
-      peer.on("connection", (newConn) => {
-        conn = newConn;
-        setupConnectionEvents();
-        console.log("Novo cliente conectado.");
-      });
-    } else {
-      if (!triedBecomeHostAfterDisconnect) {
-        triedBecomeHostAfterDisconnect = true;
-        console.log("Cliente desconectado do host, tentando virar host...");
-        otherPlayer.connected = false;
-        startAsHost();
-      }
-    }
-  });
-
-  conn.on("error", (err) => {
-    console.error("Erro na conexão:", err);
-    clearInterval(hostSendInterval);
-    hostSendInterval = null;
-    clearInterval(pingCheckInterval);
-  });
-
-  // Cliente já está pingando no connectToHost()
-}
-
-// Verifica se o cliente está inativo (ping ausente)
-setInterval(() => {
-  if (isHost && Date.now() - lastPing > 5000) {
-    if (otherPlayer.connected) {
-      console.warn("Cliente inativo. Considerando desconectado.");
-      otherPlayer.connected = false;
-    }
-  }
-}, 3000);
-
-function sendState() {
-  if (conn && conn.open) {
-    const data = {
-      type: isHost ? "host" : "client",
-      x: player.x,
-      y: player.y,
-      dir: player.dir,
-      frame: player.frame,
-      moving: player.moving,
-    };
-    conn.send(data);
-  }
-}
-
-function startHostBroadcast() {
-  if (!hostSendInterval) {
-    hostSendInterval = setInterval(() => {
-      if (isHost && conn && conn.open) {
-        conn.send({
-          type: "host",
-          x: player.x,
-          y: player.y,
-          dir: player.dir,
-          frame: player.frame,
-          moving: player.moving,
-        });
-      }
-    }, 50);
-  }
-}
-
-initNetwork();
-        
-    // Função para decidir a direção do player com base nas teclas pressionadas        
-    function getDirection() {        
-      if (keys.up && keys.left) return "diagup-left";        
-      if (keys.up && keys.right) return "diagup-right";        
-      if (keys.down && keys.left) return "diagdown-left";        
-      if (keys.down && keys.right) return "diagdown-right";        
-      if (keys.up) return "up";        
-      if (keys.down) return "down";        
-      if (keys.left) return "left";        
-      if (keys.right) return "right";        
-      return player.dir; // manter a última direção        
-    }        
-  
-function update() {
-  player.moving = false;
-  let dx = 0, dy = 0;
-
-  if (keys.up) dy -= 1;
-  if (keys.down) dy += 1;
-  if (keys.left) dx -= 1;
-  if (keys.right) dx += 1;
-
-  if (dx !== 0 || dy !== 0) {
-    const len = Math.sqrt(dx * dx + dy * dy);
-    dx = (dx / len) * player.speed;
-    dy = (dy / len) * player.speed;
-
-    const padding = 4;
-    const collisionSize = spriteSize - padding * 2;
-
-    // MOVIMENTO X
-    let newX = player.x + dx;
-    let cx = newX + padding;
-    let cy = player.y + padding;
-    let collidedX = false;
-
-    for (let offsetY of [0, collisionSize - 1]) {
-      let tileX = Math.floor((dx > 0 ? cx + collisionSize - 1 : cx) / tileSize);
-      let tileY = Math.floor((cy + offsetY) / tileSize);
-      if (map[tileY]?.[tileX] === 1) {
-        collidedX = true;
-        break;
-      }
-    }
-
-    if (!collidedX) player.x = newX;
-
-    // MOVIMENTO Y
-    let newY = player.y + dy;
-    cx = player.x + padding;
-    cy = newY + padding;
-    let collidedY = false;
-
-    for (let offsetX of [0, collisionSize - 1]) {
-      let tileX = Math.floor((cx + offsetX) / tileSize);
-      let tileY = Math.floor((dy > 0 ? cy + collisionSize : cy) / tileSize);
-      if (map[tileY]?.[tileX] === 1) {
-        collidedY = true;
-        break;
-      }
-    }
-
-    if (!collidedY) player.y = newY;
-
-    player.moving = true;
-    player.dir = getDirection();
-  }
-
-  // Animação
-  if (player.moving) {
-    player.frameDelay++;
-    if (player.frameDelay >= 10) {
-      player.frame = (player.frame + 1) % 4;
-      player.frameDelay = 0;
-    }
-  } else {
-    player.frame = 0;
-  }
-
-  // Câmera
-  camera.x = player.x - camera.width / 2 + spriteSize / 2;
-  camera.y = player.y - camera.height / 2 + spriteSize / 2;
-}
-
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // 1) Desenha o chão e as paredes normalmente
-  drawTiles();
-
-  // 2) Desenha o jogador principal
-  let img;
-  let flip = false;
-
-  switch (player.dir) {
-    case "up": img = sprites.up; break;
-    case "down": img = sprites.down; break;
-    case "left": img = sprites.side; break;
-    case "right": img = sprites.side; flip = true; break;
-    case "diagup-left": img = sprites.diagup; break;
-    case "diagup-right": img = sprites.diagup; flip = true; break;
-    case "diagdown-left": img = sprites.diagdown; flip = true; break;
-    case "diagdown-right": img = sprites.diagdown; break;
-  }
-
-  const col = player.frame % frameCols;
-  const row = Math.floor(player.frame / frameCols);
-  const px = Math.round(player.x - camera.x);
-  const py = Math.round(player.y - camera.y);
-
-  ctx.save();
-  if (flip) {
-    ctx.translate(px + spriteSize, py);
-    ctx.scale(-1, 1);
-  } else {
-    ctx.translate(px, py);
-  }
-  ctx.drawImage(
-    img,
-    col * spriteSize,
-    row * spriteSize,
-    spriteSize,
-    spriteSize,
-    0,
-    0,
-    spriteSize,
-    spriteSize
-  );
-  ctx.restore();
-
-  // 3) Só desenha o outro jogador se ele estiver conectado
-  if (otherPlayer.connected) {
-    drawOtherPlayer();
-  }
-
-  // 4) Redesenha as paredes que ficam abaixo de ambos os jogadores (ou só do principal se o outro não estiver conectado)
-  const startCol = Math.floor(camera.x / tileSize);
-  const endCol = startCol + Math.ceil(canvas.width / tileSize);
-  const startRow = Math.floor(camera.y / tileSize);
-  const endRow = startRow + Math.ceil(canvas.height / tileSize);
-
-  const bottomPlayer = player.y + spriteSize;
-  const bottomOther = otherPlayer.connected ? otherPlayer.y + spriteSize : bottomPlayer;
-  const lowestY = Math.min(bottomPlayer, bottomOther);
-  const startRedrawRow = Math.floor(lowestY / tileSize);
-
-  for (let y = startRedrawRow; y <= endRow; y++) {
-    for (let x = startCol; x <= endCol; x++) {
-      if (map[y]?.[x] === 1) {
-        const screenX = x * tileSize - camera.x;
-        const screenY = y * tileSize - camera.y;
-
-        ctx.fillStyle = "#111"; // parede
-        ctx.fillRect(screenX, screenY, tileSize, tileSize);
-      }
-    }
-  }
-}
-
-function drawOtherPlayer() {
-  // Se não estiver conectado, não desenha e limpa o objeto para evitar restos
-  if (!otherPlayer.connected) {
-    otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
-    return;
-  }
-
-  if (!sprites.down) return;
-
-  let img;
-  let flip = false;
-
-  switch (otherPlayer.dir) {
-    case "up": img = sprites.up; break;
-    case "down": img = sprites.down; break;
-    case "left": img = sprites.side; break;
-    case "right": img = sprites.side; flip = true; break;
-    case "diagup-left": img = sprites.diagup; break;
-    case "diagup-right": img = sprites.diagup; flip = true; break;
-    case "diagdown-left": img = sprites.diagdown; flip = true; break;
-    case "diagdown-right": img = sprites.diagdown; break;
-  }
-
-  const col = otherPlayer.frame % frameCols;
-  const row = Math.floor(otherPlayer.frame / frameCols);
-
-  const px = Math.round(otherPlayer.x - camera.x);
-  const py = Math.round(otherPlayer.y - camera.y);
-
-  ctx.save();
-  if (flip) {
-    ctx.translate(px + spriteSize, py);
-    ctx.scale(-1, 1);
-  } else {
-    ctx.translate(px, py);
-  }
-
-  ctx.drawImage(
-    img,
-    col * spriteSize,
-    row * spriteSize,
-    spriteSize,
-    spriteSize,
-    0,
-    0,
-    spriteSize,
-    spriteSize
-  );
-  ctx.restore();
-
-  // Redesenha paredes que estão abaixo do otherPlayer
-  const startCol = Math.floor(camera.x / tileSize);
-  const endCol = startCol + Math.ceil(canvas.width / tileSize);
-  const startRow = Math.floor(camera.y / tileSize);
-  const endRow = startRow + Math.ceil(canvas.height / tileSize);
-
-  const playerBottom = otherPlayer.y + spriteSize;
-  const playerTileRow = Math.floor(playerBottom / tileSize);
-
-  for (let y = playerTileRow; y <= endRow; y++) {
-    for (let x = startCol; x <= endCol; x++) {
-      if (map[y]?.[x] === 1) {
-        const screenX = x * tileSize - camera.x;
-        const screenY = y * tileSize - camera.y;
-
-        ctx.fillStyle = "#111"; // parede
-        ctx.fillRect(screenX, screenY, tileSize, tileSize);
-      }
-    }
-  }
-}
-          
-function drawOtherPlayer() {
-  if (!sprites.down || !otherPlayer.connected) return;
-
-  let img;
-  let flip = false;
-
-  switch (otherPlayer.dir) {
-    case "up":
-      img = sprites.up;
-      break;
-    case "down":
-      img = sprites.down;
-      break;
-    case "left":
-      img = sprites.side;
-      break;
-    case "right":
-      img = sprites.side;
-      flip = true;
-      break;
-    case "diagup-left":
-      img = sprites.diagup;
-      break;
-    case "diagup-right":
-      img = sprites.diagup;
-      flip = true;
-      break;
-    case "diagdown-left":
-      img = sprites.diagdown;
-      flip = true;
-      break;
-    case "diagdown-right":
-      img = sprites.diagdown;
-      break;
-  }
-
-  const col = otherPlayer.frame % frameCols;
-  const row = Math.floor(otherPlayer.frame / frameCols);
-
-  const px = Math.round(otherPlayer.x - camera.x);
-  const py = Math.round(otherPlayer.y - camera.y);
-
-  ctx.save();
-  if (flip) {
-    ctx.translate(px + spriteSize, py);
-    ctx.scale(-1, 1);
-  } else {
-    ctx.translate(px, py);
-  }
-
-  ctx.drawImage(
-    img,
-    col * spriteSize,
-    row * spriteSize,
-    spriteSize,
-    spriteSize,
-    0,
-    0,
-    spriteSize,
-    spriteSize
-  );
-  ctx.restore();
-
-  // Redesenha paredes que estão abaixo do otherPlayer
-  const startCol = Math.floor(camera.x / tileSize);
-  const endCol = startCol + Math.ceil(canvas.width / tileSize);
-  const startRow = Math.floor(camera.y / tileSize);
-  const endRow = startRow + Math.ceil(canvas.height / tileSize);
-
-  const playerBottom = otherPlayer.y + spriteSize;
-  const playerTileRow = Math.floor(playerBottom / tileSize);
-
-  for (let y = playerTileRow; y <= endRow; y++) {
-    for (let x = startCol; x <= endCol; x++) {
-      if (map[y]?.[x] === 1) {
-        const screenX = x * tileSize - camera.x;
-        const screenY = y * tileSize - camera.y;
-
-        ctx.fillStyle = "#111"; // parede
-        ctx.fillRect(screenX, screenY, tileSize, tileSize);
-      }
-    }
-  }
-}
-
-function gameLoop() {                   
-  update();     
-  draw();        
-  sendState(); // envia estado para o outro jogador        
-  drawOtherPlayer(); // desenha o outro jogador        
-  requestAnimationFrame(gameLoop);        
-}        
-        
-    // Setup joystick        
-    const joystick = document.getElementById("joystick");        
-    const stick = document.getElementById("stick");        
-        
-    // Limite máximo para movimentação do stick (raio)        
-    const maxDistance = 50;        
-        
-    // Armazenar estado do joystick        
-    let joyX = 0;        
-    let joyY = 0;        
-        
-    // Função para quantizar joystick em passos discretos (ex: passos de 10px)        
-    function quantize(value, step = 10) {        
-      if (value > 0) return Math.min(maxDistance, Math.floor(value / step) * step);        
-      if (value < 0) return Math.max(-maxDistance, Math.ceil(value / step) * step);        
-      return 0;        
-    }        
-        
-    joystick.addEventListener(        
-      "touchstart",        
-      (e) => {        
-        e.preventDefault();        
-      },        
-      { passive: false }        
-    );        
-        
-    joystick.addEventListener(        
-      "touchmove",        
-      (e) => {        
-        const touch = e.touches[0];        
-        const rect = joystick.getBoundingClientRect();        
-        let x = touch.clientX - rect.left - rect.width / 2;        
-        let y = touch.clientY - rect.top - rect.height / 2;        
-        
-        // Limita o joystick dentro do círculo (raio maxDistance)        
-        const dist = Math.sqrt(x * x + y * y);        
-        if (dist > maxDistance) {        
-          const angle = Math.atan2(y, x);        
-          x = Math.cos(angle) * maxDistance;        
-          y = Math.sin(angle) * maxDistance;        
-        }        
-        
-        // Quantiza para evitar flutuações pequenas        
-        joyX = quantize(x);        
-        joyY = quantize(y);        
-        
-        // Usa GSAP para suavizar o movimento do stick visualmente        
-        gsap.to(stick, {        
-          x: joyX,        
-          y: joyY,        
-          duration: 0.05,        
-          ease: "power2.out",        
-        });        
-        
-        // Atualiza teclas baseadas no joystick quantizado        
-        keys.left = joyX < -10;        
-        keys.right = joyX > 10;        
-        keys.up = joyY < -10;        
-        keys.down = joyY > 10;        
-      },        
-      { passive: false }        
-    );        
-        
-    joystick.addEventListener("touchend", () => {        
-      // Reseta joystick e teclas        
-      joyX = 0;        
-      joyY = 0;        
-      keys = { up: false, down: false, left: false, right: false };        
-        
-      gsap.to(stick, {        
-        x: 0,        
-        y: 0,        
-        duration: 0.2,        
-        ease: "power3.out",        
-      });        
-    });        
-        
-    // Controles de teclado (opcional)        
-    window.addEventListener("keydown", (e) => {        
-      if (e.key === "ArrowUp") keys.up = true;        
-      if (e.key === "ArrowDown") keys.down = true;        
-      if (e.key === "ArrowLeft") keys.left = true;        
-      if (e.key === "ArrowRight") keys.right = true;        
-    });        
-    window.addEventListener("keyup", (e) => {        
-      if (e.key === "ArrowUp") keys.up = false;        
-      if (e.key === "ArrowDown") keys.down = false;        
-      if (e.key === "ArrowLeft") keys.left = false;        
-      if (e.key === "ArrowRight") keys.right = false;        
-    });        
-        
-    // PreloadJS para carregar imagens        
-    const loader = new createjs.LoadQueue(false);        
-    loader.loadManifest([        
-      { id: "down", src: "https://i.imgur.com/Y6wqpnF.png" },        
-      { id: "up", src: "https://i.imgur.com/PuoBPF2.png" },        
-      { id: "side", src: "https://i.imgur.com/KHTustA.png" },        
-      { id: "diagup", src: "https://i.imgur.com/H2DJtsG.png" },        
-      { id: "diagdown", src: "https://i.imgur.com/HmJ1YQH.png" },        
-    ]);        
-        
-    loader.on("complete", () => {        
-      sprites.down = loader.getResult("down");        
-      sprites.up = loader.getResult("up");        
-      sprites.side = loader.getResult("side");        
-      sprites.diagup = loader.getResult("diagup");        
-      sprites.diagdown = loader.getResult("diagdown");        
-        
-      gameLoop();        
-    });        
-  </script>        </body>        
+<!DOCTYPE html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Jogo Sprite Pixelado com Joystick 8 direções</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                background: #000;
+                overflow: hidden;
+            }
+            canvas {
+                display: block;
+                margin: auto;
+                image-rendering: pixelated;
+                image-rendering: crisp-edges;
+                background: #222;
+                image-rendering: pixelated;
+            }
+            #joystick {
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                width: 140px;
+                height: 140px;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 50%;
+                touch-action: none;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+            #stick {
+                width: 70px;
+                height: 70px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 50%;
+                position: absolute;
+                left: 35px;
+                top: 35px;
+                touch-action: none;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+        </style>
+        <!-- PeerJS -->
+        <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    </head>
+    <body>
+        <canvas id="game" width="160" height="144"></canvas>
+        <div id="joystick">
+            <div id="stick"></div>
+        </div>
+        <!-- PreloadJS -->
+        <script src="https://code.createjs.com/1.0.0/preloadjs.min.js"></script>
+        <!-- GSAP -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+        <script>
+            const canvas = document.getElementById("game");
+            const ctx = canvas.getContext("2d");
+
+            // Escala para deixar pixel perfeito ao redimensionar
+            const scale = 4;
+            function resizeCanvas() {
+                const ratio = canvas.width / canvas.height;
+                let w = window.innerWidth;
+                let h = window.innerHeight;
+
+                if (w / h > ratio) {
+                    w = h * ratio;
+                } else {
+                    h = w / ratio;
+                }
+
+                canvas.style.width = w + "px";
+                canvas.style.height = h + "px";
+            }
+            window.addEventListener("resize", resizeCanvas);
+            resizeCanvas();
+            // Desliga suavização para pixel art nítido
+            ctx.imageSmoothingEnabled = false;
+
+            const spriteSize = 16;
+            const frameCols = 2;
+
+            // Player objeto
+            const player = {
+                x: canvas.width / 2 - spriteSize / 2,
+                y: canvas.height / 2 - spriteSize / 2,
+                dir: "down",
+                frame: 0,
+                frameDelay: 0,
+                moving: false,
+                speed: 1,
+            };
+
+            // Armazena sprites carregadas
+            const sprites = {};
+
+            // Direções possíveis para 8 direções
+            const directions = ["up", "down", "left", "right", "diagup-left", "diagup-right", "diagdown-left", "diagdown-right"];
+
+            const tileSize = 16;
+            const map = [
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+                [1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 1],
+                [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1],
+                [1, 0, 1, 2, 2, 2, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+                [1, 0, 0, 2, 2, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1],
+                [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+                [1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1],
+                [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],
+                [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+                [1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+                [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1],
+                [1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+            ];
+
+            function drawTiles() {
+                // Inicializa a imagem da parede e controla se já carregou
+                if (!drawTiles.wallImage) {
+                    drawTiles.wallImage = new Image();
+                    drawTiles.wallImage.src = "https://i.imgur.com/NJRWFkY.png";
+                    drawTiles.wallImageLoaded = false;
+
+                    drawTiles.wallImage.onload = () => {
+                        drawTiles.wallImageLoaded = true;
+                    };
+                }
+
+                const startCol = Math.floor(camera.x / tileSize);
+                const endCol = startCol + Math.ceil(canvas.width / tileSize);
+                const startRow = Math.floor(camera.y / tileSize);
+                const endRow = startRow + Math.ceil(canvas.height / tileSize);
+
+                for (let y = startRow; y <= endRow; y++) {
+                    for (let x = startCol; x <= endCol; x++) {
+                        const screenX = x * tileSize - camera.x;
+                        const screenY = y * tileSize - camera.y;
+
+                        if (map[y] && map[y][x] === 1) {
+                            if (drawTiles.wallImageLoaded) {
+                                ctx.drawImage(drawTiles.wallImage, screenX, screenY, tileSize, tileSize);
+                            } else {
+                                ctx.fillStyle = "#111"; // fallback temporário
+                                ctx.fillRect(screenX, screenY, tileSize, tileSize);
+                            }
+                        } else {
+                            ctx.fillStyle = (x + y) % 2 === 0 ? "#111" : "#1a1a1a"; // chão
+                            ctx.fillRect(screenX, screenY, tileSize, tileSize);
+                        }
+                    }
+                }
+            }
+            const camera = {
+                x: 0,
+                y: 0,
+                width: canvas.width,
+                height: canvas.height,
+            };
+
+            // =======================
+            // VARIÁVEIS GLOBAIS
+            // =======================
+            let keys = { up: false, down: false, left: false, right: false };
+            let peer;
+            let conn;
+            let isHost = false;
+            let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
+
+            const basePeerID = "game-peer";
+            let hostSendInterval;
+            let lastPing = Date.now();
+            let lastPong = Date.now();
+            let pingCheckInterval;
+            let triedBecomeHostAfterDisconnect = false;
+            let connectionAttempts = 0;
+            const maxConnectionAttempts = 5;
+
+            // =======================
+            // INICIALIZA A REDE
+            // =======================
+            function initNetwork() {
+                if (isHost) {
+                    startAsHost();
+                    return;
+                }
+
+                peer = new Peer({
+                    // Você pode usar seu próprio servidor se quiser:
+                    // host: 'meu-peer-servidor.com',
+                    // port: 443,
+                    // path: '/peerjs',
+                    // secure: true
+                });
+
+                peer.on("open", (id) => {
+                    console.log("Cliente iniciado com ID:", id);
+                    connectToHost();
+                });
+
+                peer.on("error", (err) => {
+                    console.error("Erro no peer:", err);
+
+                    // Se for falha na conexão, tenta virar host
+                    if (err.message.includes("Could not connect to peer")) {
+                        connectionAttempts++;
+                        if (connectionAttempts < maxConnectionAttempts) {
+                            console.log(`Tentativa ${connectionAttempts}/${maxConnectionAttempts} de conexão com host...`);
+                            setTimeout(connectToHost, 1000); // tenta de novo
+                        } else {
+                            console.warn("Máximo de tentativas atingido. Virando host.");
+                            triedBecomeHostAfterDisconnect = true;
+                            startAsHost();
+                        }
+                    }
+                });
+            }
+
+            // =======================
+            // CONECTA AO HOST
+            // =======================
+            function connectToHost() {
+                if (!peer) return;
+
+                console.log("Tentando se conectar ao host com ID:", basePeerID);
+                const tempConn = peer.connect(basePeerID);
+                let connected = false;
+
+                tempConn.on("open", () => {
+                    console.log("Conectado ao host com sucesso.");
+                    conn = tempConn;
+                    setupConnectionEvents();
+                    connected = true;
+
+                    pingCheckInterval = setInterval(() => {
+                        if (conn && conn.open) {
+                            conn.send({ type: "ping" });
+
+                            if (Date.now() - lastPong > 5000 && !triedBecomeHostAfterDisconnect) {
+                                console.warn("Host inativo. Virando host...");
+                                triedBecomeHostAfterDisconnect = true;
+                                clearInterval(pingCheckInterval);
+                                otherPlayer.connected = false;
+                                startAsHost();
+                            }
+                        }
+                    }, 2000);
+                });
+
+                tempConn.on("error", (err) => {
+                    console.warn("Erro ao tentar conectar com host:", err);
+                });
+
+                tempConn.on("close", () => {
+                    console.warn("Conexão com host fechada.");
+                    clearInterval(pingCheckInterval);
+
+                    if (!isHost && !triedBecomeHostAfterDisconnect) {
+                        triedBecomeHostAfterDisconnect = true;
+                        console.log("Tentando virar host após desconexão...");
+                        otherPlayer.connected = false;
+                        startAsHost();
+                    }
+                });
+
+                setTimeout(() => {
+                    if (!connected && !isHost && !triedBecomeHostAfterDisconnect) {
+                        console.warn("Timeout de conexão. Virando host...");
+                        otherPlayer.connected = false;
+                        triedBecomeHostAfterDisconnect = true;
+                        startAsHost();
+                    }
+                }, 3000);
+            }
+
+            // =======================
+            // INICIA COMO HOST
+            // =======================
+            function startAsHost() {
+                isHost = true;
+                triedBecomeHostAfterDisconnect = false;
+                otherPlayer.connected = false;
+                connectionAttempts = 0;
+
+                if (peer) peer.destroy();
+                peer = new Peer(basePeerID);
+
+                peer.on("open", () => {
+                    console.log("Host iniciado com ID:", basePeerID);
+                    startHostBroadcast();
+                });
+
+                peer.on("connection", handleConnection);
+
+                peer.on("error", (err) => {
+                    if (err.type === "unavailable-id") {
+                        console.warn("ID fixo em uso. Gerando ID aleatório.");
+                        peer = new Peer(); // aleatório
+                        peer.on("open", () => {
+                            console.log("Host iniciado com ID aleatório.");
+                            startHostBroadcast();
+                        });
+                        peer.on("connection", handleConnection);
+                    } else {
+                        console.error("Erro no host peer:", err);
+                    }
+                });
+            }
+
+            // =======================
+            // CONEXÃO DE CLIENTES
+            // =======================
+            function handleConnection(connection) {
+                conn = connection;
+                setupConnectionEvents();
+                console.log("Cliente conectado.");
+            }
+
+            // =======================
+            // EVENTOS DA CONEXÃO
+            // =======================
+            function setupConnectionEvents() {
+                if (!conn) return;
+
+                conn.on("data", (data) => {
+                    if (data.type === "ping") {
+                        lastPing = Date.now();
+                        if (isHost && conn && conn.open) conn.send({ type: "pong" });
+                        return;
+                    }
+
+                    if (data.type === "pong") {
+                        lastPong = Date.now();
+                        return;
+                    }
+
+                    if (data.type === "client" && isHost) {
+                        otherPlayer = data;
+                        otherPlayer.connected = true;
+                        if (conn && conn.open) {
+                            conn.send({
+                                type: "host",
+                                x: player.x,
+                                y: player.y,
+                                dir: player.dir,
+                                frame: player.frame,
+                                moving: player.moving,
+                            });
+                        }
+                    } else if (data.type === "host" && !isHost) {
+                        otherPlayer = data;
+                        otherPlayer.connected = true;
+                    }
+                });
+
+                conn.on("close", () => {
+                    console.warn("Conexão encerrada.");
+                    clearInterval(hostSendInterval);
+                    clearInterval(pingCheckInterval);
+                    hostSendInterval = null;
+
+                    if (!isHost && !triedBecomeHostAfterDisconnect) {
+                        triedBecomeHostAfterDisconnect = true;
+                        console.log("Cliente desconectado. Virando host...");
+                        otherPlayer.connected = false;
+                        startAsHost();
+                    }
+                });
+
+                conn.on("error", (err) => {
+                    console.error("Erro na conexão:", err);
+                    clearInterval(hostSendInterval);
+                    clearInterval(pingCheckInterval);
+                    hostSendInterval = null;
+
+                    if (!isHost && !triedBecomeHostAfterDisconnect) {
+                        triedBecomeHostAfterDisconnect = true;
+                        console.warn("Erro na conexão. Virando host...");
+                        startAsHost();
+                    }
+                });
+            }
+
+            // =======================
+            // VERIFICA CLIENTE INATIVO
+            // =======================
+            setInterval(() => {
+                if (isHost && Date.now() - lastPing > 5000 && otherPlayer.connected) {
+                    console.warn("Cliente inativo. Considerando desconectado.");
+                    otherPlayer.connected = false;
+                }
+            }, 3000);
+
+            // =======================
+            // ENVIA ESTADO DO PLAYER
+            // =======================
+            function sendState() {
+                if (conn && conn.open) {
+                    const data = {
+                        type: isHost ? "host" : "client",
+                        x: player.x,
+                        y: player.y,
+                        dir: player.dir,
+                        frame: player.frame,
+                        moving: player.moving,
+                    };
+                    conn.send(data);
+                }
+            }
+
+            // =======================
+            // HOST ENVIA ESTADO PERIODICAMENTE
+            // =======================
+            function startHostBroadcast() {
+                if (!hostSendInterval) {
+                    hostSendInterval = setInterval(() => {
+                        if (isHost && conn && conn.open) {
+                            conn.send({
+                                type: "host",
+                                x: player.x,
+                                y: player.y,
+                                dir: player.dir,
+                                frame: player.frame,
+                                moving: player.moving,
+                            });
+                        }
+                    }, 50);
+                }
+            }
+
+            // =======================
+            // INICIAR REDE
+            // =======================
+            initNetwork();
+
+            // Função para decidir a direção do player com base nas teclas pressionadas
+            function getDirection() {
+                if (keys.up && keys.left) return "diagup-left";
+                if (keys.up && keys.right) return "diagup-right";
+                if (keys.down && keys.left) return "diagdown-left";
+                if (keys.down && keys.right) return "diagdown-right";
+                if (keys.up) return "up";
+                if (keys.down) return "down";
+                if (keys.left) return "left";
+                if (keys.right) return "right";
+                return player.dir; // manter a última direção
+            }
+
+            function update() {
+                player.moving = false;
+                let dx = 0,
+                    dy = 0;
+
+                if (keys.up) dy -= 1;
+                if (keys.down) dy += 1;
+                if (keys.left) dx -= 1;
+                if (keys.right) dx += 1;
+
+                if (dx !== 0 || dy !== 0) {
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    dx = (dx / len) * player.speed;
+                    dy = (dy / len) * player.speed;
+
+                    const padding = 4;
+                    const collisionSize = spriteSize - padding * 2;
+
+                    // MOVIMENTO X
+                    let newX = player.x + dx;
+                    let cx = newX + padding;
+                    let cy = player.y + padding;
+                    let collidedX = false;
+
+                    for (let offsetY of [0, collisionSize - 1]) {
+                        let tileX = Math.floor((dx > 0 ? cx + collisionSize - 1 : cx) / tileSize);
+                        let tileY = Math.floor((cy + offsetY) / tileSize);
+                        if (map[tileY]?.[tileX] === 1) {
+                            collidedX = true;
+                            break;
+                        }
+                    }
+
+                    if (!collidedX) player.x = newX;
+
+                    // MOVIMENTO Y
+                    let newY = player.y + dy;
+                    cx = player.x + padding;
+                    cy = newY + padding;
+                    let collidedY = false;
+
+                    for (let offsetX of [0, collisionSize - 1]) {
+                        let tileX = Math.floor((cx + offsetX) / tileSize);
+                        let tileY = Math.floor((dy > 0 ? cy + collisionSize : cy) / tileSize);
+                        if (map[tileY]?.[tileX] === 1) {
+                            collidedY = true;
+                            break;
+                        }
+                    }
+
+                    if (!collidedY) player.y = newY;
+
+                    player.moving = true;
+                    player.dir = getDirection();
+                }
+
+                // Animação
+                if (player.moving) {
+                    player.frameDelay++;
+                    if (player.frameDelay >= 10) {
+                        player.frame = (player.frame + 1) % 4;
+                        player.frameDelay = 0;
+                    }
+                } else {
+                    player.frame = 0;
+                }
+
+                // Câmera
+                camera.x = player.x - camera.width / 2 + spriteSize / 2;
+                camera.y = player.y - camera.height / 2 + spriteSize / 2;
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // 1) Desenha o chão e as paredes normalmente
+                drawTiles();
+
+                // 2) Desenha o jogador principal
+                let img;
+                let flip = false;
+
+                switch (player.dir) {
+                    case "up":
+                        img = sprites.up;
+                        break;
+                    case "down":
+                        img = sprites.down;
+                        break;
+                    case "left":
+                        img = sprites.side;
+                        break;
+                    case "right":
+                        img = sprites.side;
+                        flip = true;
+                        break;
+                    case "diagup-left":
+                        img = sprites.diagup;
+                        break;
+                    case "diagup-right":
+                        img = sprites.diagup;
+                        flip = true;
+                        break;
+                    case "diagdown-left":
+                        img = sprites.diagdown;
+                        flip = true;
+                        break;
+                    case "diagdown-right":
+                        img = sprites.diagdown;
+                        break;
+                }
+
+                const col = player.frame % frameCols;
+                const row = Math.floor(player.frame / frameCols);
+                const px = Math.round(player.x - camera.x);
+                const py = Math.round(player.y - camera.y);
+
+                ctx.save();
+                if (flip) {
+                    ctx.translate(px + spriteSize, py);
+                    ctx.scale(-1, 1);
+                } else {
+                    ctx.translate(px, py);
+                }
+                ctx.drawImage(img, col * spriteSize, row * spriteSize, spriteSize, spriteSize, 0, 0, spriteSize, spriteSize);
+                ctx.restore();
+
+                // 3) Só desenha o outro jogador se ele estiver conectado
+                if (otherPlayer.connected) {
+                    drawOtherPlayer();
+                }
+
+                // 4) Redesenha as paredes que ficam abaixo de ambos os jogadores (ou só do principal se o outro não estiver conectado)
+                // 4) Redesenha as paredes que ficam abaixo de ambos os jogadores (ou só do principal se o outro não estiver conectado)
+                const startCol = Math.floor(camera.x / tileSize);
+                const endCol = startCol + Math.ceil(canvas.width / tileSize);
+                const startRow = Math.floor(camera.y / tileSize);
+                const endRow = startRow + Math.ceil(canvas.height / tileSize);
+
+                const bottomPlayer = player.y + spriteSize;
+                const bottomOther = otherPlayer.connected ? otherPlayer.y + spriteSize : bottomPlayer;
+                const lowestY = Math.min(bottomPlayer, bottomOther);
+                const startRedrawRow = Math.floor(lowestY / tileSize);
+
+                // Garante que a imagem está carregada
+                if (!drawTiles.wallImage) {
+                    drawTiles.wallImage = new Image();
+                    drawTiles.wallImage.src = "https://i.imgur.com/NJRWFkY.png";
+                    drawTiles.wallImageLoaded = false;
+
+                    drawTiles.wallImage.onload = () => {
+                        drawTiles.wallImageLoaded = true;
+                    };
+                }
+
+                for (let y = startRedrawRow; y <= endRow; y++) {
+                    for (let x = startCol; x <= endCol; x++) {
+                        if (map[y]?.[x] === 1) {
+                            const screenX = x * tileSize - camera.x;
+                            const screenY = y * tileSize - camera.y;
+
+                            if (drawTiles.wallImageLoaded) {
+                                ctx.drawImage(drawTiles.wallImage, screenX, screenY, tileSize, tileSize);
+                            } else {
+                                ctx.fillStyle = "#111"; // fallback enquanto carrega
+                                ctx.fillRect(screenX, screenY, tileSize, tileSize);
+                            }
+                        }
+                    }
+                }
+            }
+
+            function drawOtherPlayer() {
+                // Se não estiver conectado, não desenha e limpa o objeto para evitar restos
+                if (!otherPlayer.connected) {
+                    otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
+                    return;
+                }
+
+                if (!sprites.down) return;
+
+                let img;
+                let flip = false;
+
+                switch (otherPlayer.dir) {
+                    case "up":
+                        img = sprites.up;
+                        break;
+                    case "down":
+                        img = sprites.down;
+                        break;
+                    case "left":
+                        img = sprites.side;
+                        break;
+                    case "right":
+                        img = sprites.side;
+                        flip = true;
+                        break;
+                    case "diagup-left":
+                        img = sprites.diagup;
+                        break;
+                    case "diagup-right":
+                        img = sprites.diagup;
+                        flip = true;
+                        break;
+                    case "diagdown-left":
+                        img = sprites.diagdown;
+                        flip = true;
+                        break;
+                    case "diagdown-right":
+                        img = sprites.diagdown;
+                        break;
+                }
+
+                const col = otherPlayer.frame % frameCols;
+                const row = Math.floor(otherPlayer.frame / frameCols);
+
+                const px = Math.round(otherPlayer.x - camera.x);
+                const py = Math.round(otherPlayer.y - camera.y);
+
+                ctx.save();
+                if (flip) {
+                    ctx.translate(px + spriteSize, py);
+                    ctx.scale(-1, 1);
+                } else {
+                    ctx.translate(px, py);
+                }
+
+                ctx.drawImage(img, col * spriteSize, row * spriteSize, spriteSize, spriteSize, 0, 0, spriteSize, spriteSize);
+                ctx.restore();
+
+                const startCol = Math.floor(camera.x / tileSize);
+                const endCol = startCol + Math.ceil(canvas.width / tileSize);
+                const startRow = Math.floor(camera.y / tileSize);
+                const endRow = startRow + Math.ceil(canvas.height / tileSize);
+
+                const bottomPlayer = player.y + spriteSize;
+                const bottomOther = otherPlayer.connected ? otherPlayer.y + spriteSize : bottomPlayer;
+                const lowestY = Math.min(bottomPlayer, bottomOther);
+                const startRedrawRow = Math.floor(lowestY / tileSize);
+
+                // Garante que a imagem está carregada
+                if (!drawTiles.wallImage) {
+                    drawTiles.wallImage = new Image();
+                    drawTiles.wallImage.src = "https://i.imgur.com/NJRWFkY.png";
+                    drawTiles.wallImageLoaded = false;
+
+                    drawTiles.wallImage.onload = () => {
+                        drawTiles.wallImageLoaded = true;
+                    };
+                }
+
+                for (let y = startRedrawRow; y <= endRow; y++) {
+                    for (let x = startCol; x <= endCol; x++) {
+                        if (map[y]?.[x] === 1) {
+                            const screenX = x * tileSize - camera.x;
+                            const screenY = y * tileSize - camera.y;
+
+                            if (drawTiles.wallImageLoaded) {
+                                ctx.drawImage(drawTiles.wallImage, screenX, screenY, tileSize, tileSize);
+                            } else {
+                                ctx.fillStyle = "#111"; // fallback enquanto carrega
+                                ctx.fillRect(screenX, screenY, tileSize, tileSize);
+                            }
+                        }
+                    }
+                }
+            }
+
+            function gameLoop() {
+                update();
+                draw();
+                sendState(); // envia estado para o outro jogador
+                drawOtherPlayer(); // desenha o outro jogador
+                requestAnimationFrame(gameLoop);
+            }
+
+            // Setup joystick
+            const joystick = document.getElementById("joystick");
+            const stick = document.getElementById("stick");
+
+            // Limite máximo para movimentação do stick (raio)
+            const maxDistance = 50;
+
+            // Armazenar estado do joystick
+            let joyX = 0;
+            let joyY = 0;
+
+            // Função para quantizar joystick em passos discretos (ex: passos de 10px)
+            function quantize(value, step = 10) {
+                if (value > 0) return Math.min(maxDistance, Math.floor(value / step) * step);
+                if (value < 0) return Math.max(-maxDistance, Math.ceil(value / step) * step);
+                return 0;
+            }
+
+            joystick.addEventListener(
+                "touchstart",
+                (e) => {
+                    e.preventDefault();
+                },
+                { passive: false }
+            );
+
+            joystick.addEventListener(
+                "touchmove",
+                (e) => {
+                    const touch = e.touches[0];
+                    const rect = joystick.getBoundingClientRect();
+                    let x = touch.clientX - rect.left - rect.width / 2;
+                    let y = touch.clientY - rect.top - rect.height / 2;
+
+                    // Limita o joystick dentro do círculo (raio maxDistance)
+                    const dist = Math.sqrt(x * x + y * y);
+                    if (dist > maxDistance) {
+                        const angle = Math.atan2(y, x);
+                        x = Math.cos(angle) * maxDistance;
+                        y = Math.sin(angle) * maxDistance;
+                    }
+
+                    // Quantiza para evitar flutuações pequenas
+                    joyX = quantize(x);
+                    joyY = quantize(y);
+
+                    // Usa GSAP para suavizar o movimento do stick visualmente
+                    gsap.to(stick, {
+                        x: joyX,
+                        y: joyY,
+                        duration: 0.05,
+                        ease: "power2.out",
+                    });
+
+                    // Atualiza teclas baseadas no joystick quantizado
+                    keys.left = joyX < -10;
+                    keys.right = joyX > 10;
+                    keys.up = joyY < -10;
+                    keys.down = joyY > 10;
+                },
+                { passive: false }
+            );
+
+            joystick.addEventListener("touchend", () => {
+                // Reseta joystick e teclas
+                joyX = 0;
+                joyY = 0;
+                keys = { up: false, down: false, left: false, right: false };
+
+                gsap.to(stick, {
+                    x: 0,
+                    y: 0,
+                    duration: 0.2,
+                    ease: "power3.out",
+                });
+            });
+
+            // Controles de teclado (opcional)
+            window.addEventListener("keydown", (e) => {
+                if (e.key === "ArrowUp") keys.up = true;
+                if (e.key === "ArrowDown") keys.down = true;
+                if (e.key === "ArrowLeft") keys.left = true;
+                if (e.key === "ArrowRight") keys.right = true;
+            });
+            window.addEventListener("keyup", (e) => {
+                if (e.key === "ArrowUp") keys.up = false;
+                if (e.key === "ArrowDown") keys.down = false;
+                if (e.key === "ArrowLeft") keys.left = false;
+                if (e.key === "ArrowRight") keys.right = false;
+            });
+
+            // PreloadJS para carregar imagens
+            const loader = new createjs.LoadQueue(false);
+            loader.loadManifest([
+                { id: "down", src: "https://i.imgur.com/Y6wqpnF.png" },
+                { id: "up", src: "https://i.imgur.com/PuoBPF2.png" },
+                { id: "side", src: "https://i.imgur.com/KHTustA.png" },
+                { id: "diagup", src: "https://i.imgur.com/H2DJtsG.png" },
+                { id: "diagdown", src: "https://i.imgur.com/HmJ1YQH.png" },
+            ]);
+
+            loader.on("complete", () => {
+                sprites.down = loader.getResult("down");
+                sprites.up = loader.getResult("up");
+                sprites.side = loader.getResult("side");
+                sprites.diagup = loader.getResult("diagup");
+                sprites.diagdown = loader.getResult("diagdown");
+
+                gameLoop();
+            });
+        </script>
+    </body>
 </html>
