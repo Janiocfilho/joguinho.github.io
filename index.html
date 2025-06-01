@@ -4,6 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Jogo Sprite Pixelado com Joystick 8 direções</title>
+        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
         <style>
             * {
                 margin: 0;
@@ -59,10 +60,42 @@
         <script src="https://code.createjs.com/1.0.0/preloadjs.min.js"></script>
         <!-- GSAP -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
         <script>
             const canvas = document.getElementById("game");
             const ctx = canvas.getContext("2d");
 
+            // Mantém o estilo pixelado
+            ctx.imageSmoothingEnabled = false;
+
+            let gameState = "menu";
+
+            function drawMenu() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Fundo
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Define estilos pixel art
+                ctx.fillStyle = "#fff";
+                ctx.font = "8px 'Press Start 2P'"; // Tamanho pequeno e fonte estilo pixel
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+
+                // Título
+                ctx.fillText("The Bald Ones", canvas.width / 2, canvas.height / 2 - 20);
+
+                // Subtítulo
+                ctx.fillStyle = "#888";
+                ctx.fillText("clique aqui", canvas.width / 2, canvas.height / 2 + 10);
+            }
+
+            canvas.addEventListener("click", () => {
+                if (gameState === "menu") {
+                    gameState = "jogando";
+                }
+            });
             // Escala para deixar pixel perfeito ao redimensionar
             const scale = 4;
             function resizeCanvas() {
@@ -585,6 +618,66 @@
                 ctx.drawImage(img, col * spriteSize, row * spriteSize, spriteSize, spriteSize, 0, 0, spriteSize, spriteSize);
                 ctx.restore();
 
+                // 3) VINHETA PIXEL ART NOS CANTOS
+
+                const blockSize = 16; // tamanho do pixel grande da vinheta
+                const rows = Math.ceil(canvas.height / blockSize);
+                const cols = Math.ceil(canvas.width / blockSize);
+                const borderWidth = 5; // quantos blocos de largura
+
+                ctx.save();
+
+                function drawBlock(r, c, alpha) {
+                    ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+                    ctx.fillRect(c * blockSize, r * blockSize, blockSize, blockSize);
+                }
+
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        // define alpha conforme a distância do canto para efeito de vinheta pixelada
+                        let alpha = 0;
+
+                        // superior esquerdo
+                        if (r < borderWidth && c < borderWidth) {
+                            alpha = 0.9 - 0.15 * (r + c);
+                        }
+                        // superior direito
+                        else if (r < borderWidth && c >= cols - borderWidth) {
+                            alpha = 0.9 - 0.15 * (r + (cols - 1 - c));
+                        }
+                        // inferior esquerdo
+                        else if (r >= rows - borderWidth && c < borderWidth) {
+                            alpha = 0.9 - 0.15 * (rows - 1 - r + c);
+                        }
+                        // inferior direito
+                        else if (r >= rows - borderWidth && c >= cols - borderWidth) {
+                            alpha = 0.9 - 0.15 * (rows - 1 - r + (cols - 1 - c));
+                        }
+                        // borda superior
+                        else if (r < borderWidth) {
+                            alpha = 0.7;
+                        }
+                        // borda inferior
+                        else if (r >= rows - borderWidth) {
+                            alpha = 0.7;
+                        }
+                        // borda esquerda
+                        else if (c < borderWidth) {
+                            alpha = 0.7;
+                        }
+                        // borda direita
+                        else if (c >= cols - borderWidth) {
+                            alpha = 0.7;
+                        }
+
+                        if (alpha > 0) {
+                            drawBlock(r, c, alpha);
+                        }
+                    }
+                }
+
+                ctx.restore();
+
                 // 3) Só desenha o outro jogador se ele estiver conectado
                 if (otherPlayer.connected) {
                     drawOtherPlayer();
@@ -728,10 +821,15 @@
             }
 
             function gameLoop() {
-                update();
-                draw();
-                sendState(); // envia estado para o outro jogador
-                drawOtherPlayer(); // desenha o outro jogador
+                if (gameState === "menu") {
+                    drawMenu();
+                } else if (gameState === "jogando") {
+                    update();
+                    draw();
+                    sendState();
+                    drawOtherPlayer();
+                }
+
                 requestAnimationFrame(gameLoop);
             }
 
