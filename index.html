@@ -209,280 +209,295 @@
             height: canvas.height,
         };
 
-        // =======================
-        // VARIÁVEIS GLOBAIS
-        // =======================
-        let keys = { up: false, down: false, left: false, right: false };
-        let peer;
-        let conn;
-        let isHost = false;
-        let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
+// =======================
+// VARIÁVEIS GLOBAIS
+// =======================
+let keys = { up: false, down: false, left: false, right: false };
+let peer;
+let conn;
+let isHost = false;
+let otherPlayer = { x: 0, y: 0, dir: "down", frame: 0, moving: false, connected: false };
 
-        const basePeerID = "game-peer";
-        let hostSendInterval;
-        let lastPing = Date.now();
-        let lastPong = Date.now();
-        let pingCheckInterval;
-        let triedBecomeHostAfterDisconnect = false;
-        let connectionAttempts = 0;
-        const maxConnectionAttempts = 5;
+const basePeerID = "game-peer";
+let hostSendInterval;
+let lastPing = Date.now();
+let lastPong = Date.now();
+let pingCheckInterval;
+let triedBecomeHostAfterDisconnect = false;
+let connectionAttempts = 0;
+const maxConnectionAttempts = 5;
 
-        // =======================
-        // INICIALIZA A REDE
-        // =======================
-        function initNetwork() {
-            if (isHost) {
+// =======================
+// INICIALIZA A REDE
+// =======================
+function initNetwork() {
+    if (isHost) {
+        startAsHost();
+        return;
+    }
+
+    peer = new Peer({
+        // Você pode usar seu próprio servidor se quiser:
+        // host: 'meu-peer-servidor.com',
+        // port: 443,
+        // path: '/peerjs',
+        // secure: true
+    });
+
+    peer.on("open", (id) => {
+        console.log("Cliente iniciado com ID:", id);
+        connectToHost();
+    });
+
+    peer.on("error", (err) => {
+        console.error("Erro no peer:", err);
+
+        // Se for falha na conexão, tenta virar host
+        if (err.message.includes("Could not connect to peer")) {
+            connectionAttempts++;
+            if (connectionAttempts < maxConnectionAttempts) {
+                console.log(`Tentativa ${connectionAttempts}/${maxConnectionAttempts} de conexão com host...`);
+                setTimeout(connectToHost, 1000); // tenta de novo
+            } else {
+                console.warn("Máximo de tentativas atingido. Virando host.");
+                triedBecomeHostAfterDisconnect = true;
                 startAsHost();
-                return;
             }
-
-            peer = new Peer({
-                // Você pode usar seu próprio servidor se quiser:
-                // host: 'meu-peer-servidor.com',
-                // port: 443,
-                // path: '/peerjs',
-                // secure: true
-            });
-
-            peer.on("open", (id) => {
-                console.log("Cliente iniciado com ID:", id);
-                connectToHost();
-            });
-
-            peer.on("error", (err) => {
-                console.error("Erro no peer:", err);
-
-                // Se for falha na conexão, tenta virar host
-                if (err.message.includes("Could not connect to peer")) {
-                    connectionAttempts++;
-                    if (connectionAttempts < maxConnectionAttempts) {
-                        console.log(`Tentativa ${connectionAttempts}/${maxConnectionAttempts} de conexão com host...`);
-                        setTimeout(connectToHost, 1000); // tenta de novo
-                    } else {
-                        console.warn("Máximo de tentativas atingido. Virando host.");
-                        triedBecomeHostAfterDisconnect = true;
-                        startAsHost();
-                    }
-                }
-            });
         }
+    });
+}
 
-        // =======================
-        // CONECTA AO HOST
-        // =======================
-        function connectToHost() {
-            if (!peer) return;
+// =======================
+// CONECTA AO HOST
+// =======================
+function connectToHost() {
+    if (!peer) return;
 
-            console.log("Tentando se conectar ao host com ID:", basePeerID);
-            const tempConn = peer.connect(basePeerID);
-            let connected = false;
+    console.log("Tentando se conectar ao host com ID:", basePeerID);
+    const tempConn = peer.connect(basePeerID);
+    let connected = false;
 
-            tempConn.on("open", () => {
-                console.log("Conectado ao host com sucesso.");
-                conn = tempConn;
-                setupConnectionEvents();
-                connected = true;
+    tempConn.on("open", () => {
+        console.log("Conectado ao host com sucesso.");
+        conn = tempConn;
+        setupConnectionEvents();
+        connected = true;
 
-                pingCheckInterval = setInterval(() => {
-                    if (conn && conn.open) {
-                        conn.send({ type: "ping" });
+        pingCheckInterval = setInterval(() => {
+            if (conn && conn.open) {
+                conn.send({ type: "ping" });
 
-                        if (Date.now() - lastPong > 5000 && !triedBecomeHostAfterDisconnect) {
-                            console.warn("Host inativo. Virando host...");
-                            triedBecomeHostAfterDisconnect = true;
-                            clearInterval(pingCheckInterval);
-                            otherPlayer.connected = false;
-                            startAsHost();
-                        }
-                    }
-                }, 2000);
-            });
-
-            tempConn.on("error", (err) => {
-                console.warn("Erro ao tentar conectar com host:", err);
-            });
-
-            tempConn.on("close", () => {
-                console.warn("Conexão com host fechada.");
-                clearInterval(pingCheckInterval);
-
-                if (!isHost && !triedBecomeHostAfterDisconnect) {
+                if (Date.now() - lastPong > 5000 && !triedBecomeHostAfterDisconnect) {
+                    console.warn("Host inativo. Virando host...");
                     triedBecomeHostAfterDisconnect = true;
-                    console.log("Tentando virar host após desconexão...");
+                    clearInterval(pingCheckInterval);
                     otherPlayer.connected = false;
                     startAsHost();
                 }
-            });
+            }
+        }, 2000);
+    });
 
-            setTimeout(() => {
-                if (!connected && !isHost && !triedBecomeHostAfterDisconnect) {
-                    console.warn("Timeout de conexão. Virando host...");
-                    otherPlayer.connected = false;
-                    triedBecomeHostAfterDisconnect = true;
-                    startAsHost();
-                }
-            }, 3000);
-        }
+    tempConn.on("error", (err) => {
+        console.warn("Erro ao tentar conectar com host:", err);
+    });
 
-        // =======================
-        // INICIA COMO HOST
-        // =======================
-        function startAsHost() {
-            isHost = true;
-            triedBecomeHostAfterDisconnect = false;
+    tempConn.on("close", () => {
+        console.warn("Conexão com host fechada.");
+        clearInterval(pingCheckInterval);
+
+        if (!isHost && !triedBecomeHostAfterDisconnect) {
+            triedBecomeHostAfterDisconnect = true;
+            console.log("Tentando virar host após desconexão...");
             otherPlayer.connected = false;
-            connectionAttempts = 0;
+            startAsHost();
+        }
+    });
 
-            if (peer) peer.destroy();
-            peer = new Peer(basePeerID);
+    setTimeout(() => {
+        if (!connected && !isHost && !triedBecomeHostAfterDisconnect) {
+            console.warn("Timeout de conexão. Virando host...");
+            otherPlayer.connected = false;
+            triedBecomeHostAfterDisconnect = true;
+            startAsHost();
+        }
+    }, 3000);
+}
 
+// =======================
+// INICIA COMO HOST
+// =======================
+function startAsHost() {
+    isHost = true;
+    triedBecomeHostAfterDisconnect = false;
+    otherPlayer.connected = false;
+    connectionAttempts = 0;
+
+    if (peer) peer.destroy();
+    peer = new Peer(basePeerID);
+
+    peer.on("open", () => {
+        console.log("Host iniciado com ID:", basePeerID);
+        startHostBroadcast();
+    });
+
+    peer.on("connection", handleConnection);
+
+    peer.on("error", (err) => {
+        if (err.type === "unavailable-id") {
+            console.warn("ID fixo em uso. Gerando ID aleatório.");
+            peer = new Peer(); // aleatório
             peer.on("open", () => {
-                console.log("Host iniciado com ID:", basePeerID);
+                console.log("Host iniciado com ID aleatório.");
                 startHostBroadcast();
             });
-
             peer.on("connection", handleConnection);
+        } else {
+            console.error("Erro no host peer:", err);
+        }
+    });
+}
 
-            peer.on("error", (err) => {
-                if (err.type === "unavailable-id") {
-                    console.warn("ID fixo em uso. Gerando ID aleatório.");
-                    peer = new Peer(); // aleatório
-                    peer.on("open", () => {
-                        console.log("Host iniciado com ID aleatório.");
-                        startHostBroadcast();
-                    });
-                    peer.on("connection", handleConnection);
-                } else {
-                    console.error("Erro no host peer:", err);
-                }
-            });
+// =======================
+// CONEXÃO DE CLIENTES
+// =======================
+function handleConnection(connection) {
+    conn = connection;
+    setupConnectionEvents();
+    console.log("Cliente conectado.");
+}
+
+// =======================
+// EVENTOS DA CONEXÃO
+// =======================
+function setupConnectionEvents() {
+    if (!conn) return;
+
+    conn.on("data", (data) => {
+        if (data.type === "ping") {
+            lastPing = Date.now();
+            if (isHost && conn && conn.open) conn.send({ type: "pong" });
+            return;
         }
 
-        // =======================
-        // CONEXÃO DE CLIENTES
-        // =======================
-        function handleConnection(connection) {
-            conn = connection;
-            setupConnectionEvents();
-            console.log("Cliente conectado.");
+        if (data.type === "pong") {
+            lastPong = Date.now();
+            return;
         }
 
-        // =======================
-        // EVENTOS DA CONEXÃO
-        // =======================
-        function setupConnectionEvents() {
-            if (!conn) return;
-
-            conn.on("data", (data) => {
-                if (data.type === "ping") {
-                    lastPing = Date.now();
-                    if (isHost && conn && conn.open) conn.send({ type: "pong" });
-                    return;
-                }
-
-                if (data.type === "pong") {
-                    lastPong = Date.now();
-                    return;
-                }
-
-                if (data.type === "client" && isHost) {
-                    otherPlayer = data;
-                    otherPlayer.connected = true;
-                    if (conn && conn.open) {
-                        conn.send({
-                            type: "host",
-                            x: player.x,
-                            y: player.y,
-                            dir: player.dir,
-                            frame: player.frame,
-                            moving: player.moving,
-                        });
-                    }
-                } else if (data.type === "host" && !isHost) {
-                    otherPlayer = data;
-                    otherPlayer.connected = true;
-                }
-            });
-
-            conn.on("close", () => {
-                console.warn("Conexão encerrada.");
-                clearInterval(hostSendInterval);
-                clearInterval(pingCheckInterval);
-                hostSendInterval = null;
-
-                if (!isHost && !triedBecomeHostAfterDisconnect) {
-                    triedBecomeHostAfterDisconnect = true;
-                    console.log("Cliente desconectado. Virando host...");
-                    otherPlayer.connected = false;
-                    startAsHost();
-                }
-            });
-
-            conn.on("error", (err) => {
-                console.error("Erro na conexão:", err);
-                clearInterval(hostSendInterval);
-                clearInterval(pingCheckInterval);
-                hostSendInterval = null;
-
-                if (!isHost && !triedBecomeHostAfterDisconnect) {
-                    triedBecomeHostAfterDisconnect = true;
-                    console.warn("Erro na conexão. Virando host...");
-                    startAsHost();
-                }
-            });
-        }
-
-        // =======================
-        // VERIFICA CLIENTE INATIVO
-        // =======================
-        setInterval(() => {
-            if (isHost && Date.now() - lastPing > 5000 && otherPlayer.connected) {
-                console.warn("Cliente inativo. Considerando desconectado.");
-                otherPlayer.connected = false;
-            }
-        }, 3000);
-
-        // =======================
-        // ENVIA ESTADO DO PLAYER
-        // =======================
-        function sendState() {
+        if (data.type === "client" && isHost) {
+            // Host recebe dados do cliente
+            otherPlayer = {
+                x: data.x,
+                y: data.y,
+                dir: data.dir,
+                frame: data.frame,
+                moving: data.moving,
+                connected: true
+            };
+            // Envia o estado do host para o cliente
             if (conn && conn.open) {
-                const data = {
-                    type: isHost ? "host" : "client",
+                conn.send({
+                    type: "host",
                     x: player.x,
                     y: player.y,
                     dir: player.dir,
                     frame: player.frame,
                     moving: player.moving,
-                };
-                conn.send(data);
+                });
             }
+        } else if (data.type === "host" && !isHost) {
+            // Cliente recebe dados do host
+            otherPlayer = {
+                x: data.x,
+                y: data.y,
+                dir: data.dir,
+                frame: data.frame,
+                moving: data.moving,
+                connected: true
+            };
         }
+    });
 
-        // =======================
-        // HOST ENVIA ESTADO PERIODICAMENTE
-        // =======================
-        function startHostBroadcast() {
-            if (!hostSendInterval) {
-                hostSendInterval = setInterval(() => {
-                    if (isHost && conn && conn.open) {
-                        conn.send({
-                            type: "host",
-                            x: player.x,
-                            y: player.y,
-                            dir: player.dir,
-                            frame: player.frame,
-                            moving: player.moving,
-                        });
-                    }
-                }, 50);
+    conn.on("close", () => {
+        console.warn("Conexão encerrada.");
+        clearInterval(hostSendInterval);
+        clearInterval(pingCheckInterval);
+        hostSendInterval = null;
+
+        if (!isHost && !triedBecomeHostAfterDisconnect) {
+            triedBecomeHostAfterDisconnect = true;
+            console.log("Cliente desconectado. Virando host...");
+            otherPlayer.connected = false;
+            startAsHost();
+        }
+    });
+
+    conn.on("error", (err) => {
+        console.error("Erro na conexão:", err);
+        clearInterval(hostSendInterval);
+        clearInterval(pingCheckInterval);
+        hostSendInterval = null;
+
+        if (!isHost && !triedBecomeHostAfterDisconnect) {
+            triedBecomeHostAfterDisconnect = true;
+            console.warn("Erro na conexão. Virando host...");
+            startAsHost();
+        }
+    });
+}
+
+// =======================
+// VERIFICA CLIENTE INATIVO
+// =======================
+setInterval(() => {
+    if (isHost && Date.now() - lastPing > 5000 && otherPlayer.connected) {
+        console.warn("Cliente inativo. Considerando desconectado.");
+        otherPlayer.connected = false;
+    }
+}, 3000);
+
+// =======================
+// ENVIA ESTADO DO PLAYER
+// =======================
+function sendState() {
+    if (conn && conn.open) {
+        const data = {
+            type: isHost ? "host" : "client",
+            x: player.x,
+            y: player.y,
+            dir: player.dir,
+            frame: player.frame,
+            moving: player.moving,
+        };
+        conn.send(data);
+    }
+}
+
+// =======================
+// HOST ENVIA ESTADO PERIODICAMENTE
+// =======================
+function startHostBroadcast() {
+    if (!hostSendInterval) {
+        hostSendInterval = setInterval(() => {
+            if (isHost && conn && conn.open) {
+                conn.send({
+                    type: "host",
+                    x: player.x,
+                    y: player.y,
+                    dir: player.dir,
+                    frame: player.frame,
+                    moving: player.moving,
+                });
             }
-        }
+        }, 50);
+    }
+}
 
-        // =======================
-        // INICIAR REDE
-        // =======================
-        initNetwork();
+// =======================
+// INICIAR REDE
+// =======================
+initNetwork();
 
         // Função para decidir a direção do player com base nas teclas pressionadas
         function getDirection() {
