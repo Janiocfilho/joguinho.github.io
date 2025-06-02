@@ -750,12 +750,18 @@ function update() {
     camera.x = player.x - camera.width / 2 + spriteSize / 2;
     camera.y = player.y - camera.height / 2 + spriteSize / 2;
 
+    // Atualiza inimigo com base no player principal
     moveEnemyTowardPlayer(enemy, player, map);
+
+    // Checa colisão inimigo com players
     checkEnemyCollision(enemy, player, otherPlayer);
+
+    // Atualiza partículas (sangue)
     updateParticles(map);
 }
 
-      function draw() {
+
+function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // 1) Desenha o chão e as paredes normalmente
@@ -829,39 +835,23 @@ function update() {
 
     for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            // define alpha conforme a distância do canto para efeito de vinheta pixelada
             let alpha = 0;
 
-            // superior esquerdo
             if (r < borderWidth && c < borderWidth) {
                 alpha = 0.9 - 0.15 * (r + c);
-            }
-            // superior direito
-            else if (r < borderWidth && c >= cols - borderWidth) {
+            } else if (r < borderWidth && c >= cols - borderWidth) {
                 alpha = 0.9 - 0.15 * (r + (cols - 1 - c));
-            }
-            // inferior esquerdo
-            else if (r >= rows - borderWidth && c < borderWidth) {
+            } else if (r >= rows - borderWidth && c < borderWidth) {
                 alpha = 0.9 - 0.15 * (rows - 1 - r + c);
-            }
-            // inferior direito
-            else if (r >= rows - borderWidth && c >= cols - borderWidth) {
+            } else if (r >= rows - borderWidth && c >= cols - borderWidth) {
                 alpha = 0.9 - 0.15 * (rows - 1 - r + (cols - 1 - c));
-            }
-            // borda superior
-            else if (r < borderWidth) {
+            } else if (r < borderWidth) {
                 alpha = 0.7;
-            }
-            // borda inferior
-            else if (r >= rows - borderWidth) {
+            } else if (r >= rows - borderWidth) {
                 alpha = 0.7;
-            }
-            // borda esquerda
-            else if (c < borderWidth) {
+            } else if (c < borderWidth) {
                 alpha = 0.7;
-            }
-            // borda direita
-            else if (c >= cols - borderWidth) {
+            } else if (c >= cols - borderWidth) {
                 alpha = 0.7;
             }
 
@@ -889,7 +879,6 @@ function update() {
     const lowestY = Math.min(bottomPlayer, bottomOther);
     const startRedrawRow = Math.floor(lowestY / tileSize);
 
-    // Garante que a imagem está carregada
     if (!drawTiles.wallImage) {
         drawTiles.wallImage = new Image();
         drawTiles.wallImage.src = "https://i.imgur.com/NJRWFkY.png";
@@ -909,14 +898,13 @@ function update() {
                 if (drawTiles.wallImageLoaded) {
                     ctx.drawImage(drawTiles.wallImage, screenX, screenY, tileSize, tileSize);
                 } else {
-                    ctx.fillStyle = "#111"; // fallback enquanto carrega
+                    ctx.fillStyle = "#111";
                     ctx.fillRect(screenX, screenY, tileSize, tileSize);
                 }
             }
         }
     }
 }
-
 
         function drawOtherPlayer() {
             // Se não estiver conectado, não desenha e limpa o objeto para evitar restos
