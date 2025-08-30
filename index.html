@@ -375,124 +375,115 @@ function handleConnection(connection) {
     enemy.x = 100;
     enemy.y = 100;
 }
+// =======================
+// EVENTOS DA CONEXÃO
+// =======================
+function setupConnectionEvents() {
+    if (!conn) return;
 
-
-            // =======================
-            // EVENTOS DA CONEXÃO
-            // =======================
-            function setupConnectionEvents() {
-                if (!conn) return;
-
-conn.on("data", (data) => {
-    if (data.type === "ping") {
-        lastPing = Date.now();
-        if (isHost && conn && conn.open) conn.send({ type: "pong" });
-        return;
-    }
-
-    if (data.type === "pong") {
-        lastPong = Date.now();
-        return;
-    }
-
-    if (data.type === "client" && isHost) {
-        otherPlayer = data;
-        otherPlayer.connected = true;
-
-        if (conn && conn.open) {
-            conn.send({
-                type: "host",
-                x: player.x,
-                y: player.y,
-                dir: player.dir,
-                frame: player.frame,
-                moving: player.moving,
-                enemyX: enemy.x,
-                enemyY: enemy.y,
-                enemyActive: enemy.active
-            });
+    conn.on("data", (data) => {
+        if (data.type === "ping") {
+            lastPing = Date.now();
+            if (isHost && conn && conn.open) conn.send({ type: "pong" });
+            return;
         }
-    } else if (data.type === "host" && !isHost) {
-        otherPlayer = {
-            x: data.x,
-            y: data.y,
-            dir: data.dir,
-            frame: data.frame,
-            moving: data.moving,
-            connected: true
+
+        if (data.type === "pong") {
+            lastPong = Date.now();
+            return;
+        }
+
+        if (data.type === "client" && isHost) {
+            otherPlayer = data;
+            otherPlayer.connected = true;
+
+            if (conn && conn.open) {
+                conn.send({
+                    type: "host",
+                    x: player.x,
+                    y: player.y,
+                    dir: player.dir,
+                    frame: player.frame,
+                    moving: player.moving,
+                    enemyX: enemy.x,
+                    enemyY: enemy.y,
+                    enemyActive: enemy.active
+                });
+            }
+        } else if (data.type === "host" && !isHost) {
+            otherPlayer = {
+                x: data.x,
+                y: data.y,
+                dir: data.dir,
+                frame: data.frame,
+                moving: data.moving,
+                connected: true
+            };
+
+            enemy.x = data.enemyX;
+            enemy.y = data.enemyY;
+            enemy.active = data.enemyActive;
+        }
+    });
+
+    conn.on("close", () => {
+        console.warn("Conexão encerrada.");
+        clearInterval(hostSendInterval);
+        clearInterval(pingCheckInterval);
+        hostSendInterval = null;
+
+        if (!isHost && !triedBecomeHostAfterDisconnect) {
+            triedBecomeHostAfterDisconnect = true;
+            console.log("Cliente desconectado. Virando host...");
+            otherPlayer.connected = false;
+            startAsHost();
+        }
+    });
+
+    conn.on("error", (err) => {
+        console.error("Erro na conexão:", err);
+        clearInterval(hostSendInterval);
+        clearInterval(pingCheckInterval);
+        hostSendInterval = null;
+
+        if (!isHost && !triedBecomeHostAfterDisconnect) {
+            triedBecomeHostAfterDisconnect = true;
+            console.warn("Erro na conexão. Virando host...");
+            startAsHost();
+        }
+    });
+}
+
+// =======================
+// VERIFICA CLIENTE INATIVO
+// =======================
+setInterval(() => {
+    if (isHost && Date.now() - lastPing > 5000 && otherPlayer.connected) {
+        console.warn("Cliente inativo. Considerando desconectado.");
+        otherPlayer.connected = false;
+    }
+}, 3000);
+
+// =======================
+// ENVIA ESTADO DO PLAYER
+// =======================
+function sendState() {
+    if (conn && conn.open) {
+        const data = {
+            type: isHost ? "host" : "client",
+            x: player.x,
+            y: player.y,
+            dir: player.dir,
+            frame: player.frame,
+            moving: player.moving,
         };
-
-        enemy.x = data.enemyX;
-        enemy.y = data.enemyY;
-        enemy.active = data.enemyActive;
+        conn.send(data);
     }
+}
 
-    if (data.type === "enemy" && !isHost) {
-        enemy.x = data.x;
-        enemy.y = data.y;
-        enemy.active = true;
-    }
-});
-
-
-                conn.on("close", () => {
-                    console.warn("Conexão encerrada.");
-                    clearInterval(hostSendInterval);
-                    clearInterval(pingCheckInterval);
-                    hostSendInterval = null;
-
-                    if (!isHost && !triedBecomeHostAfterDisconnect) {
-                        triedBecomeHostAfterDisconnect = true;
-                        console.log("Cliente desconectado. Virando host...");
-                        otherPlayer.connected = false;
-                        startAsHost();
-                    }
-                });
-
-                conn.on("error", (err) => {
-                    console.error("Erro na conexão:", err);
-                    clearInterval(hostSendInterval);
-                    clearInterval(pingCheckInterval);
-                    hostSendInterval = null;
-
-                    if (!isHost && !triedBecomeHostAfterDisconnect) {
-                        triedBecomeHostAfterDisconnect = true;
-                        console.warn("Erro na conexão. Virando host...");
-                        startAsHost();
-                    }
-                });
-            }
-
-            // =======================
-            // VERIFICA CLIENTE INATIVO
-            // =======================
-            setInterval(() => {
-                if (isHost && Date.now() - lastPing > 5000 && otherPlayer.connected) {
-                    console.warn("Cliente inativo. Considerando desconectado.");
-                    otherPlayer.connected = false;
-                }
-            }, 3000);
-
-            // =======================
-            // ENVIA ESTADO DO PLAYER
-            // =======================
-            function sendState() {
-                if (conn && conn.open) {
-                    const data = {
-                        type: isHost ? "host" : "client",
-                        x: player.x,
-                        y: player.y,
-                        dir: player.dir,
-                        frame: player.frame,
-                        moving: player.moving,
-                    };
-                    conn.send(data);
-                }
-            }
-
-            // =======================
-            // HOST ENVIA ESTADO PERIODICAMENTE
-            // =======================
+// =======================
+// HOST ENVIA ESTADO PERIODICAMENTE
+// =======================
 function startHostBroadcast() {
     if (!hostSendInterval) {
         hostSendInterval = setInterval(() => {
@@ -509,26 +500,16 @@ function startHostBroadcast() {
                     enemyActive: enemy.active
                 });
             }
-            if (enemy.active) {
-    conn.send({
-        type: "enemy",
-        x: enemy.x,
-        y: enemy.y
-    });
-}
-
         }, 50);
-    
     }
 }
 
+// =======================
+// INICIAR REDE
+// =======================
+initNetwork();
 
-            // =======================
-            // INICIAR REDE
-            // =======================
-            initNetwork();
-
-            function updateEnemy() {
+function updateEnemy() {
     if (!isHost || !enemy.active) return;
 
     // Calcula distâncias dos players
@@ -556,7 +537,6 @@ function drawEnemy(ctx) {
     const size = 20; // tamanho do inimigo
     ctx.fillRect(enemy.x - size/2, enemy.y - size/2, size, size);
 }
-
 
             // Função para decidir a direção do player com base nas teclas pressionadas
             function getDirection() {
